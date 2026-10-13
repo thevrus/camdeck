@@ -12,7 +12,7 @@ make app
 OUT=build/release
 rm -rf "$OUT" && mkdir -p "$OUT"
 ZIP="$OUT/Camdeck-$VERSION.zip"
-ditto -c -k --keepParent build/Camdeck.app "$ZIP"
+ditto -c -k --sequesterRsrc --keepParent build/Camdeck.app "$ZIP"
 
 .build/artifacts/sparkle/Sparkle/bin/generate_appcast "$OUT" \
     --download-url-prefix "https://github.com/thevrus/camdeck/releases/download/v$VERSION/"
