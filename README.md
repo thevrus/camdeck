@@ -60,7 +60,7 @@ A Mac running macOS 26. It works on Apple Silicon.
 
 1. [Download the latest Camdeck.zip](https://github.com/thevrus/camdeck/releases/latest) and double-click it.
 2. Drag **Camdeck** into your Applications folder.
-3. Open it. The first time, macOS may say it can't verify the app. Right-click Camdeck, choose **Open**, then **Open** again. (On macOS 26 you may need System Settings → Privacy & Security → **Open Anyway**.) You only do this once.
+3. Open it. macOS will say it "could not verify Camdeck is free of malware". Click **Done**, open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Camdeck, then confirm. You only do this once. (Camdeck is open source and not yet notarized by Apple, which is what triggers this.)
 4. Allow camera access when asked, plug in your webcam and go.
 
 Camdeck updates itself. When a new version is out, it downloads and installs quietly. You can also choose **Camdeck → Check for Updates…** any time.
