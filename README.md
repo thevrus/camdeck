@@ -1,72 +1,85 @@
-# Camdeck: webcam controller for Mac
+<p align="center">
+  <img src="docs/icon.png" width="128" height="128" alt="Camdeck icon">
+</p>
 
-Native macOS app to control your USB webcam: Insta360 Link 2C, OBSBOT, Opal and any UVC camera. Zoom, pan, tilt, exposure, white balance, auto framing and presets in one small window. A lightweight open source alternative to Insta360 Link Controller, OBSBOT Center and Opal Composer.
+<h1 align="center">Camdeck</h1>
+
+<p align="center"><b>Webcam controls for Mac</b></p>
+
+A small, free Mac app to adjust your USB webcam: zoom, move the view, fix brightness and colors, and keep yourself centered in frame. Works with the Insta360 Link 2C and most other USB webcams.
+
+It's a light, open source alternative to the apps that come with Insta360, OBSBOT and Opal cameras.
 
 ## Why
 
-Every webcam vendor ships its own control app. They are heavy, Electron or Qt, sit in the menu bar forever, and only talk to that vendor's camera. Switch cameras and you need another one.
+Each camera brand ships its own heavy control app, and it only works with that brand. Camdeck is one small app for many cameras. There's nothing to install besides the app itself, and it doesn't run in the background unless you want it to.
 
-Camdeck replaces them with a single native SwiftUI app that speaks UVC directly over user-space USB control requests. No kernel extension, no driver install, no background daemon.
+## What you can do
 
-| Vendor app | Camdeck |
+- **See a live preview**, flip it like a mirror, and pick the video quality.
+- **Fix the picture**: brightness, contrast, colors, sharpness, focus and flicker.
+- **Control exposure**: let the camera decide, or set it yourself.
+- **Zoom and move the view** with a simple draggable pad.
+- **Auto framing**: the app follows your face and keeps you centered.
+- **Save presets**: store your favorite settings and bring them back with one click.
+- **Spot blown-out highlights** with the zebra stripe overlay.
+- **Use Mac video effects** like Portrait, Studio Light and Background.
+- **Run from the menu bar** and open at login, if you like.
+
+## Which cameras work
+
+Almost any USB webcam works for the basics (picture, exposure, zoom, focus, color). That includes Logitech Brio and C920, Elgato Facecam, Razer Kiyo and Anker PowerConf.
+
+Some cameras get extra features:
+
+| Camera | Status |
 | --- | --- |
-| Hundreds of MB, Qt or Electron | A few MB, Swift and SwiftUI |
-| One brand only | Any UVC webcam |
-| Opaque vendor features | Vendor features via open JSON profiles and small code drivers |
-| Always running | Opens when you need it, optional menu bar item |
+| Insta360 Link 2C | Fully tested, with extras like digital pan/tilt, HDR and shutter speed |
+| Insta360 Link 2, Link | Should work, not tested yet |
+| AnkerWork C310, PowerConf C200 | Early support, not tested on real hardware |
+| OBSBOT Tiny 2, Tiny SE, Meet | Planned |
+| Opal Tadpole, C1 | Planned |
 
-## What it does
+Own a camera that isn't listed? [Open an issue](https://github.com/thevrus/camdeck/issues) and we'll look at adding it.
 
-- **Live preview** with mirror, resolution and frame rate picker.
-- **Image controls** for brightness, contrast, saturation, sharpness, white balance, focus and anti-flicker on any UVC camera.
-- **Exposure** with auto and manual modes, plus vendor extras where the profile knows them (ISO, shutter, HDR, compensation).
-- **Zoom and pan/tilt** with a draggable pad, including digital reframe on cameras whose standard pan/tilt is a no-op.
-- **Auto framing** on any camera that can zoom and reframe, using the Vision framework to keep you centered.
-- **Presets** to save and recall a full camera state, and a settings lock that keeps firmware from drifting.
-- **Zebra overlay** to spot clipped highlights.
-- **macOS video effects** such as Portrait, Studio Light and Background from one row.
-- **Menu bar mode** and open at login.
-- **`uvcctl`** command line tool to dump descriptors and read or write controls while adding support for a new camera.
+## Common questions
 
-## Supported cameras
+**Do I still need the camera maker's app?**
+No. You can uninstall it.
 
-Any UVC webcam gets image, exposure, zoom, focus and white balance on day one. That includes Logitech Brio and C920, Elgato Facecam, Razer Kiyo, Anker PowerConf and most others.
+**Will it work in Zoom, Google Meet, Teams and OBS?**
+Yes. Settings are saved on the camera itself, so every app sees the same picture.
 
-| Camera | Replaces | Extras | Status |
-| --- | --- | --- | --- |
-| Insta360 Link 2C | Insta360 Link Controller | Digital pan/tilt, ISO, shutter, HDR, exposure mode, serial and firmware info | Verified on hardware |
-| Insta360 Link 2, Link | Insta360 Link Controller | Same protocol family | Untested |
-| AnkerWork C310, PowerConf C200 | AnkerWork app | Field of view, HDR and flip (C200), face focus and exposure, mic noise reduction and pickup (C310) | Experimental, unverified on hardware |
-| OBSBOT Tiny 2, Tiny SE, Meet | OBSBOT Center | Mechanical PTZ via TLV protocol | Planned |
-| Opal Tadpole, C1 | Opal Composer | | Planned |
+**Does it install a driver?**
+No. Nothing is added to your system.
 
-Have one of the planned cameras? Open an issue with the output of `uvcctl` and we can add it.
+**What Mac do I need?**
+A Mac running macOS 26. It works on Apple Silicon.
 
-## FAQ
+## Get started
 
-**Does it work without the Insta360 Link Controller app?**
-Yes. Camdeck talks to the camera directly over USB. You can uninstall the vendor app.
+Camdeck is built from source for now. You'll need macOS 26 and Apple's free developer tools (Xcode).
 
-**Does it work in Zoom, Google Meet, Teams, OBS?**
-Yes. Settings are written to the camera itself, so every app sees the same image.
-
-**Does it install a driver or kernel extension?**
-No. It uses plain user-space UVC control requests. Nothing runs in the background unless you turn on the menu bar item.
-
-**Is it Apple Silicon native?**
-Yes. Swift and SwiftUI, built for macOS 26.
-
-## Install
-
-Requires macOS 26 and Xcode 26 command line tools.
+1. Open the Terminal app.
+2. Paste these lines, one at a time:
 
 ```sh
 git clone https://github.com/thevrus/camdeck.git
 cd camdeck
-make app      # builds build/Camdeck.app
-make run      # builds and opens it
-make test     # runs the UVCKit test suite
+make run
 ```
+
+3. Camdeck opens. Plug in your webcam and go.
+
+Want to keep the app? Run `make app` instead. It creates `build/Camdeck.app`, which you can drag into your Applications folder.
+
+## License
+
+MIT. Free to use and share.
+
+---
+
+# For developers
 
 ## How it works
 
@@ -85,9 +98,19 @@ Camera (composed per device)
 UVCTransport (IOKit EP0, rate limited, forbidden selector guard)
 ```
 
-The app never knows which camera is attached. It asks for capabilities. Drivers provide them. USB safety rules live in one place.
+The app never knows which camera is attached. It asks for capabilities, drivers provide them, and USB safety rules live in one place. Camdeck speaks UVC directly over user-space USB control requests, with no kernel extension or daemon.
 
-Details in [docs/adr-001-camera-drivers.md](docs/adr-001-camera-drivers.md). The Link 2C protocol notes are in [docs/link2c-protocol.md](docs/link2c-protocol.md).
+Details in [docs/adr-001-camera-drivers.md](docs/adr-001-camera-drivers.md). Link 2C protocol notes are in [docs/link2c-protocol.md](docs/link2c-protocol.md).
+
+## Build and test
+
+```sh
+make app      # builds build/Camdeck.app
+make run      # builds and opens it
+make test     # runs the UVCKit test suite
+```
+
+The `uvcctl` command line tool dumps camera descriptors and reads or writes controls. Use it when adding support for a new camera.
 
 ## Adding a camera
 
@@ -96,7 +119,3 @@ Details in [docs/adr-001-camera-drivers.md](docs/adr-001-camera-drivers.md). The
 3. Map simple vendor controls in a JSON profile. Schema in [docs/profile-schema.md](docs/profile-schema.md).
 4. Write a code driver only for features that need logic.
 5. Add the descriptor as a test fixture.
-
-## License
-
-MIT
