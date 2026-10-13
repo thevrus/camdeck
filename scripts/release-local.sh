@@ -22,5 +22,6 @@ git add appcast.xml
 git commit -m "Release $VERSION"
 git tag "v$VERSION"
 git push origin main "v$VERSION"
-gh release create "v$VERSION" "$ZIP" --title "Camdeck $VERSION" --generate-notes
+scripts/make-dmg.sh build/Camdeck.dmg
+gh release create "v$VERSION" "$ZIP" build/Camdeck.dmg --title "Camdeck $VERSION" --generate-notes
 echo "released $VERSION"

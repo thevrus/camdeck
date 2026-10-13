@@ -30,6 +30,7 @@ jobs:
           VERSION="$VERSION" BUILD="$(git rev-list --count HEAD)" make app
           mkdir -p build/release
           ditto -c -k --sequesterRsrc --keepParent build/Camdeck.app "build/release/Camdeck-$VERSION.zip"
+          scripts/make-dmg.sh build/Camdeck.dmg   # outside build/release so Sparkle's appcast ignores it
 
       - name: Sign update and refresh appcast
         env:
@@ -45,7 +46,7 @@ jobs:
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "build/release/Camdeck-$VERSION.zip" --title "Camdeck $VERSION" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" "build/release/Camdeck-$VERSION.zip" build/Camdeck.dmg --title "Camdeck $VERSION" --generate-notes
 
       # Last, so the feed never points at a download that does not exist yet.
       - name: Publish appcast
