@@ -357,9 +357,31 @@ public struct DeviceProfile: Codable, Sendable, Equatable {
 }
 
 public enum VendorProfiles {
+    private final class Anchor {}
+
+    /// Profiles directory inside the SwiftPM resource bundle. Looked up by path rather than Bundle.module,
+    /// which traps (killing the app) if Bundle(url:) rejects the bundle, e.g. one built without an Info.plist.
+    private static func profilesDirectory() -> URL? {
+        let name = "Camdeck_UVCKit.bundle"
+        let roots = [Bundle.main.resourceURL, Bundle(for: Anchor.self).resourceURL,
+                     Bundle.main.bundleURL, Bundle(for: Anchor.self).bundleURL.deletingLastPathComponent()]
+        for root in roots.compactMap({ $0 }) {
+            for sub in ["Contents/Resources/Profiles", "Profiles"] {
+                let dir = root.appendingPathComponent(name).appendingPathComponent(sub)
+                if FileManager.default.fileExists(atPath: dir.path) { return dir }
+            }
+        }
+        return nil
+    }
+
     /// Every JSON file in Resources/Profiles. Files that fail to decode are logged and skipped.
     public static let all: [DeviceProfile] = {
-        let urls = Bundle.module.urls(forResourcesWithExtension: "json", subdirectory: "Profiles") ?? []
+        guard let dir = profilesDirectory() else {
+            NSLog("Camdeck_UVCKit resource bundle not found; using generic profile only")
+            return []
+        }
+        let urls = ((try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension == "json" }
         return urls.sorted { $0.lastPathComponent < $1.lastPathComponent }.compactMap { url in
             do { return try DeviceProfile.decode(Data(contentsOf: url)) }
             catch { NSLog("profile \(url.lastPathComponent) rejected: \(error)"); return nil }

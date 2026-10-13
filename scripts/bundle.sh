@@ -13,7 +13,7 @@ cp "$BIN" "$APP/Contents/MacOS/Camdeck"
 cp -R "$(dirname "$BIN")/Sparkle.framework" "$APP/Contents/Frameworks/"
 install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/Camdeck"
 # SwiftPM resource bundle for UVCKit (device profiles); Bundle.module finds it in Resources.
-cp -R "$(dirname "$BIN")"/*UVCKit.bundle "$APP/Contents/Resources/"
+cp -R "$(dirname "$BIN")/Camdeck_UVCKit.bundle" "$APP/Contents/Resources/"
 # Liquid Glass icon (macOS 26): Icon Composer .icon compiled to Assets.car + legacy .icns
 xcrun actool scripts/Camdeck.icon --compile "$APP/Contents/Resources" --app-icon Camdeck \
     --platform macosx --minimum-deployment-target 26.0 \
