@@ -108,11 +108,13 @@ The `uvcctl` command line tool dumps camera descriptors and reads or writes cont
 
 ## Shipping an update
 
-Updates use [Sparkle](https://sparkle-project.org). The signing key lives in the maintainer's keychain; the feed is `appcast.xml` in this repo.
+Updates use [Sparkle](https://sparkle-project.org). Releases are built by GitHub Actions ([release.yml](.github/workflows/release.yml)); the update signing key is the `SPARKLE_ED_PRIVATE_KEY` repo secret.
 
 ```sh
-make release VERSION=0.2.0   # build, sign, update appcast.xml, publish a GitHub Release
+make release VERSION=0.2.0   # tags v0.2.0; CI builds, signs, publishes the release and updates appcast.xml
 ```
+
+Run the workflow from the Actions tab for a dry run that publishes nothing. `make release-local` does the same from a Mac that has the key in its keychain.
 
 ## Adding a camera
 

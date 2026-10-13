@@ -1,0 +1,60 @@
+name: Release
+
+# Push a tag like v0.2.0 to build, sign and publish an update that installed apps pick up via Sparkle.
+# Run manually (Actions tab) to do a dry run: builds and signs, publishes nothing.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: release
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Test
+        run: swift test
+
+      - name: Build app
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then VERSION="${GITHUB_REF_NAME#v}"; else VERSION="0.0.0-dryrun"; fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          VERSION="$VERSION" BUILD="$(git rev-list --count HEAD)" make app
+          mkdir -p build/release
+          ditto -c -k --sequesterRsrc --keepParent build/Camdeck.app "build/release/Camdeck-$VERSION.zip"
+
+      - name: Sign update and refresh appcast
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          git fetch origin main
+          git show origin/main:appcast.xml > build/release/appcast.xml
+          echo "$SPARKLE_ED_PRIVATE_KEY" | .build/artifacts/sparkle/Sparkle/bin/generate_appcast build/release \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/"
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "build/release/Camdeck-$VERSION.zip" --title "Camdeck $VERSION" --generate-notes
+
+      # Last, so the feed never points at a download that does not exist yet.
+      - name: Publish appcast
+        if: github.ref_type == 'tag'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B main origin/main
+          cp build/release/appcast.xml appcast.xml
+          git add appcast.xml
+          git commit -m "Release $VERSION"
+          git push origin main
