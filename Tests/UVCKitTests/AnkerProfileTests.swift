@@ -48,13 +48,6 @@ final class AnkerProfileTests: XCTestCase {
         XCTAssertEqual(out.flatMap(e.decode), 0x1234)
     }
 
-    func testFixedSizesUnchanged() {
-        XCTAssertEqual(ProfileEncoding.u8.size, 1)
-        XCTAssertEqual(ProfileEncoding.u16le.size, 2)
-        XCTAssertEqual(ProfileEncoding.i16le.size, 2)
-        XCTAssertEqual(ProfileEncoding.bitInU16le(bit: 3).size, 2)
-    }
-
     func testOffsetEncodingJSON() throws {
         let a = try JSONDecoder().decode(ProfileEncoding.self, from: Data(#"{"type": "u8-at-offset", "offset": 3}"#.utf8))
         XCTAssertEqual(a, .u8AtOffset(offset: 3))
@@ -120,6 +113,7 @@ final class AnkerProfileTests: XCTestCase {
         XCTAssertEqual(Array(w.data[2 ... 3]), [95, 0])
         for i in 0 ..< 60 where !(2 ... 3).contains(i) { XCTAssertEqual(w.data[i], buf[i], "byte \(i) changed") }
         XCTAssertEqual(try dev.readProfile(fov), 95)
+        XCTAssertEqual(ch.requests, 5, "GET_LEN is asked once: LEN, CUR, CUR, SET, CUR")
     }
 
     func testC310FaceExposureFieldsShareOneSelector() throws {

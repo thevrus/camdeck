@@ -26,7 +26,7 @@ enum AutoFramingMode: String, CaseIterable, Identifiable {
 }
 
 /// Frames from the session -> Vision -> FramingController -> CameraController writes.
-/// Runs on its own serial queue at <= 10 fps; the output connection is disabled while off.
+/// Runs on its own serial queue at <= 10 fps; the output connection is disabled while neither framing nor zebra needs frames.
 final class AutoFramer: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
     let output = AVCaptureVideoDataOutput()
     private let queue = DispatchQueue(label: "app.camdeck.autoframer")
@@ -41,6 +41,8 @@ final class AutoFramer: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
     private var pendingTuning: FramingController.Tuning?
     /// Called on the main actor with each processed frame's result.
     var onStep: (@MainActor (CGRect?, PTZ) -> Void)?
+    /// Fed every frame (it rate-limits itself and returns at once while disabled).
+    var zebra: ZebraAnalyzer?
 
     static let manualPause: TimeInterval = 3
 
@@ -53,7 +55,13 @@ final class AutoFramer: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
 
     func configure(mode: FramingMode?) {
         lock.lock(); self.mode = mode; needsReset = true; lock.unlock()
-        output.connection(with: .video)?.isEnabled = mode != nil
+        updateConnection()
+    }
+
+    /// Call when auto framing or zebra turns on or off.
+    func updateConnection() {
+        lock.lock(); let framing = mode != nil; lock.unlock()
+        output.connection(with: .video)?.isEnabled = framing || zebra?.isEnabled == true
     }
 
     /// Per-device geometry: Reframe travel (nil = zoom-only framing), applied on the framer queue.
@@ -77,6 +85,7 @@ final class AutoFramer: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         let tuning = pendingTuning; pendingTuning = nil
         lock.unlock()
         if let tuning { engine.controller.tuning = tuning }
+        zebra?.process(sampleBuffer: sb)
         guard let mode, !paused, let pb = CMSampleBufferGetImageBuffer(sb) else { return }
         if reset { engine.reset() }
         let t = CMSampleBufferGetPresentationTimeStamp(sb).seconds

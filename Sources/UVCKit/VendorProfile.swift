@@ -96,6 +96,14 @@ public enum ProfileEncoding: Codable, Sendable, Equatable {
         }
     }
 
+    /// Whether `encode` needs the current device bytes (bit and offset encodings), so writes must be rmw.
+    public var requiresCurrent: Bool {
+        switch self {
+        case .u8, .u16le, .i16le: return false
+        case .bitInU16le, .u8AtOffset, .u16leAtOffset: return true
+        }
+    }
+
     /// Bytes needed in the buffer for this encoding to decode or encode.
     private var minimumCount: Int {
         switch self {
@@ -313,13 +321,7 @@ public struct DeviceProfile: Codable, Sendable, Equatable {
             guard seen.insert(c.id).inserted else { throw fail("duplicate id") }
             guard units[c.unit] != nil || UUID(uuidString: c.unit) != nil else { throw fail("unknown unit \(c.unit)") }
             guard (0 ... 255).contains(c.selector) else { throw fail("selector out of range") }
-            switch c.encoding {
-            case .bitInU16le:
-                if !c.needsReadModifyWrite { throw fail("bit encoding requires rmw") }
-            case .u8AtOffset, .u16leAtOffset:
-                if !c.needsReadModifyWrite { throw fail("offset encoding requires rmw") }
-            case .u8, .u16le, .i16le: break
-            }
+            if c.encoding.requiresCurrent, !c.needsReadModifyWrite { throw fail("\(c.encoding) requires rmw") }
             switch c.ui.kind {
             case .slider:
                 guard let lo = c.ui.min, let hi = c.ui.max, hi > lo else { throw fail("slider needs min < max") }

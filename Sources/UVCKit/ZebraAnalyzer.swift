@@ -13,6 +13,7 @@ public final class ZebraAnalyzer: @unchecked Sendable {
             defaults.set(isEnabled, forKey: "zebra.enabled")
             state.withLock { $0.enabled = isEnabled }
             if !isEnabled { DispatchQueue.main.async { self.mask = nil; self.clippedFraction = 0 } }
+            onEnabledChange?()
         }
     }
     /// Luma fraction (0...1) at or above which a pixel counts as clipped.
@@ -24,6 +25,8 @@ public final class ZebraAnalyzer: @unchecked Sendable {
     public private(set) var clippedFraction: Double = 0
 
     private struct State { var enabled: Bool; var threshold: Double; var last: UInt64 = 0; var busy = false; var processed = 0 }
+    /// Called after `isEnabled` changes, on the caller's thread (frame sources use it to start or stop frames).
+    @ObservationIgnored public var onEnabledChange: (() -> Void)?
     @ObservationIgnored private let state: OSAllocatedUnfairLock<State>
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let minInterval: TimeInterval

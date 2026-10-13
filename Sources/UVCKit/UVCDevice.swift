@@ -218,17 +218,15 @@ public final class UVCDevice: @unchecked Sendable {
     public func writeProfile(_ c: ProfileControl, wire: Int) throws {
         guard let u = unitID(forGUID: profile.guid(for: c.unit)) else { throw UVCError.noUnit(c.id) }
         let sel = UInt8(c.selector)
-        try transport.withRMWLock {
-            var current: [UInt8]?
-            if c.needsReadModifyWrite {
-                let n = try profileLength(c, unit: u, selector: sel)
-                let b = try get(unit: u, selector: sel, length: n)
-                // A device-sized buffer goes back whole, so a short read must not become a short write.
-                if c.encoding.size == nil, b.count != n { throw UVCError.io(-1) }
-                current = b
-            }
+        let encode = { (current: [UInt8]?) throws -> [UInt8] in
             guard let data = c.encoding.encode(c.normalize(wire), current: current) else { throw UVCError.io(-1) }
-            try set(unit: u, selector: sel, data: data)
+            return data
+        }
+        if c.needsReadModifyWrite {
+            // readModifyWrite rejects a short read, so a device-sized buffer never goes back truncated.
+            try transport.readModifyWrite(unit: u, selector: sel, length: profileLength(c, unit: u, selector: sel), encode)
+        } else {
+            try set(unit: u, selector: sel, data: encode(nil))
         }
     }
 }

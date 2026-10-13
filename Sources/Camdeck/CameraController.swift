@@ -41,7 +41,18 @@ final class CameraController {
     private(set) var deviceInfo: DeviceInfo?
     /// Which driver provides each capability (diagnostics).
     private(set) var capabilityProviders: [String: String] = [:]
-    @ObservationIgnored private var camera: CameraDevice?
+    // MARK: Presets, settings lock, zebra
+    /// Named presets of the selected camera. Nil until a camera is attached.
+    private(set) var presets: PresetStore?
+    /// Re-asserts the user's settings when other apps change them. Off by default; nil until a camera is attached.
+    private(set) var settingsLock: SettingsLock?
+    /// Overexposure mask from the live frames; off by default.
+    let zebra = ZebraAnalyzer()
+    /// > 0 while the lock re-asserts its snapshot: those writes are not user edits.
+    @ObservationIgnored private var quietWrites = 0
+    @ObservationIgnored private var activationObserver: NSObjectProtocol?
+    /// Observed: zoomFactorRange, zoomFactor and the auto framing UI depend on it.
+    private var camera: CameraDevice?
     @ObservationIgnored private var pendingReframe: CGPoint?
     @ObservationIgnored private var lastReframeWrite = Date.distantPast
     @ObservationIgnored private var reframeFlushScheduled = false
@@ -53,10 +64,86 @@ final class CameraController {
         return z.factor(fromRaw: value("zoom").first ?? z.rawRange.lowerBound)
     }
     var zoomFactorRange: ClosedRange<Double> { camera?.zoom?.factorRange ?? 1 ... 1 }
+    /// Auto framing needs a camera that can zoom.
+    var canAutoFrame: Bool { zoomFactorRange.upperBound > 1 }
 
     func setZoomFactor(_ f: Double) {
         guard let z = camera?.zoom else { return }
-        set("zoom", [z.raw(fromFactor: f)])
+        set("zoom", [z.raw(fromFactor: f)]) // set() reports the user change
+    }
+
+    /// Tells the settings lock that the user changed something (never called for auto-framer or lock writes).
+    private func userEdited() {
+        if quietWrites == 0 { settingsLock?.userDidChange() }
+    }
+
+    private func quietly<T>(_ body: (CameraController) -> T) -> T {
+        quietWrites += 1
+        defer { quietWrites -= 1 }
+        return body(self)
+    }
+
+    private var controlsByID: [String: UVCControl] { Dictionary(uniqueKeysWithValues: states.map { ($0.id, $0.control) }) }
+
+    private func readStandard(_ ids: [String]) async -> [String: [Int]] {
+        guard let dev = uvc else { return [:] }
+        let controls = controlsByID
+        let wanted = ids.compactMap { id in controls[id].map { (id, $0) } }
+        return await withCheckedContinuation { k in
+            io.async {
+                var out: [String: [Int]] = [:]
+                for (id, c) in wanted { if let v = try? dev.read(c) { out[id] = v } }
+                k.resume(returning: out)
+            }
+        }
+    }
+
+    /// Replaces the preset store and lock for the camera that just attached.
+    private func attachPresetsAndLock(_ id: String) {
+        let store = PresetStore(uniqueID: id, controller: self)
+        let lock = SettingsLock(
+            uniqueID: id, observeAppActivation: false,
+            capture: { [weak self] in self?.captureSettings() ?? CameraSettings() },
+            apply: { [weak self] s in self?.quietly { $0.apply(s) } ?? 0 },
+            read: { [weak self] ids in await self?.readStandard(ids) ?? [:] },
+            write: { [weak self] id, v in self?.quietly { $0.set(id, v) } },
+            isAutoFramingActive: { [weak self] in self?.autoFraming != .off })
+        store.onApplied = { [weak lock] in lock?.userDidChange() }
+        presets = store
+        settingsLock = lock
+        if lock.isEnabled { lock.attached() } else { store.applyStartup() }
+    }
+
+    /// Brief confirmation shown over the preview; clears itself.
+    private(set) var toast: String?
+    private var toastTask: Task<Void, Never>?
+    func showToast(_ text: String) {
+        toast = text
+        toastTask?.cancel()
+        toastTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            if !Task.isCancelled { self?.toast = nil }
+        }
+    }
+
+    /// ⌘S: store the current look as a new preset.
+    func quickSavePreset() {
+        guard let presets else { return }
+        let name = presets.defaultName
+        _ = presets.save(name: name)
+        showToast("Saved as \(name)")
+    }
+
+    /// Set by the menu and inspector; ContentView shows the confirmation.
+    var confirmingReset = false
+
+    /// Public "Reset all settings": natural format, image and exposure controls, framing and auto framing. Presets are kept.
+    func restoreDefaults() {
+        autoFraming = .off
+        resetView()
+        for id in ["exposure", "wb-temp", "focus"] { reset(id) }
+        applyNaturalDefaults()
+        showToast("Settings reset")
     }
 
     /// Moves the view; writes are coalesced and throttled to <= 10 Hz. Counts as manual input.
@@ -64,6 +151,7 @@ final class CameraController {
         framer.noteManualInput()
         applyReframe(center.clampedToUnitSquare)
         syncFramer()
+        userEdited()
     }
 
     private func applyReframe(_ c: CGPoint) {
@@ -125,6 +213,27 @@ final class CameraController {
             if autoFraming == .off { isSubjectDetected = false; subjectBox = nil }
         }
     }
+    // MARK: Center Stage (Continuity Camera / Apple cameras)
+    // Apple's own framing. Apps get no zoom or image controls on an iPhone, so this is its auto framing.
+    // Per-app setting; cooperative mode lets both Camdeck and Control Center change it.
+
+    /// True when the selected camera can do Center Stage in some format.
+    var centerStageSupported: Bool { currentDevice?.formats.contains { $0.isCenterStageSupported } ?? false }
+
+    private(set) var centerStageEnabled = AVCaptureDevice.isCenterStageEnabled
+
+    func setCenterStage(_ on: Bool) {
+        if AVCaptureDevice.centerStageControlMode == .user { AVCaptureDevice.centerStageControlMode = .cooperative }
+        AVCaptureDevice.isCenterStageEnabled = on
+        syncCenterStage()
+    }
+
+    /// Re-read after selection or activation; Control Center can change it behind our back.
+    private func syncCenterStage() {
+        let v = AVCaptureDevice.isCenterStageEnabled
+        if v != centerStageEnabled { centerStageEnabled = v }
+    }
+
     private(set) var isSubjectDetected = false
     /// Subject box, normalized, top-left origin, in preview coordinates (mirrored when `mirrored`).
     private(set) var subjectBox: CGRect?
@@ -154,6 +263,9 @@ final class CameraController {
             NotificationCenter.default.addObserver(forName: n, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in self?.scheduleRefresh() }
             }
+        }
+        activationObserver = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.syncCenterStage(); await self?.settingsLock?.appDidBecomeActive() }
         }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized: authorized = true; refresh()
@@ -201,7 +313,11 @@ final class CameraController {
         let session = self.session
         let framer = self.framer, attachOutput = framerAttached, mode = autoFraming.framing
         framerAttached = true
-        if !attachOutput { framer.onStep = { [weak self] box, cmd in self?.autoFramerStep(box, cmd) } }
+        if !attachOutput {
+            framer.zebra = zebra
+            framer.onStep = { [weak self] box, cmd in self?.autoFramerStep(box, cmd) }
+            zebra.onEnabledChange = { [sessionQueue, weak framer] in sessionQueue.async { framer?.updateConnection() } }
+        }
         sessionQueue.async {
             session.beginConfiguration()
             session.inputs.forEach { session.removeInput($0) }
@@ -213,6 +329,7 @@ final class CameraController {
         }
         formats = FormatOption.options(for: cam)
         syncFormat(cam)
+        syncCenterStage()
         attachUVC()
     }
 
@@ -226,6 +343,7 @@ final class CameraController {
     func selectFormat(_ id: String) {
         guard let opt = formats.first(where: { $0.id == id }), let cam = currentDevice else { return }
         selectedFormatID = id
+        userEdited()
         let format = opt.format
         let t = Self.frameDuration(fps: opt.fps, in: format)
         // On the session queue, so it lands after any pending (re)configuration instead of being reset by it.
@@ -298,6 +416,7 @@ final class CameraController {
                 self.vendorValues = vv
                 self.syncFramer()
                 self.applyNaturalDefaultsOnFirstAttach(id)
+                self.attachPresetsAndLock(id)
             }
         }
     }
@@ -327,6 +446,7 @@ final class CameraController {
         values[id] = value
         pending[id] = value
         scheduleFlush()
+        userEdited()
         if id == "zoom" { refreshReframeTravel() }
         if ["zoom", "pantilt", "roll"].contains(id) { framer.noteManualInput(); syncFramer() }
     }
@@ -385,7 +505,7 @@ final class CameraController {
         let batch = pending; pending = [:]
         let vendorBatch = pendingVendor; pendingVendor = [:]
         guard let dev = uvc else { return }
-        let controls = Dictionary(uniqueKeysWithValues: states.map { ($0.id, $0.control) })
+        let controls = controlsByID
         let vendor = Dictionary(uniqueKeysWithValues: profileControls.map { ($0.id, $0) })
         let log = Self.log
         io.async {
@@ -432,6 +552,7 @@ final class CameraController {
         vendorValues[c.id] = v
         pendingVendor[c.id] = v
         scheduleFlush()
+        userEdited()
     }
 
     /// False while the control's `enabledWhen` is unmet or its value could not be read.

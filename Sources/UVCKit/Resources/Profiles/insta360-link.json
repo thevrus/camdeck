@@ -14,7 +14,7 @@
   "controls": [
     {
       "id": "aeMode",
-      "title": "Exposure mode",
+      "title": "Exposure Mode",
       "symbol": "a.circle",
       "section": "image",
       "unit": "xu9",
@@ -30,7 +30,7 @@
     },
     {
       "id": "ev",
-      "title": "Exposure compensation",
+      "title": "Exposure Compensation",
       "symbol": "plusminus.circle",
       "section": "image",
       "unit": "xu9",

@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 /// Framing mini-map: the crop rectangle shows the visible region inside the full sensor field.
@@ -10,6 +11,8 @@ struct FramingPad: View {
     let panTiltMax: [Int]
     let panTilt: [Int]
     var isLocked: Bool = false
+    var session: AVCaptureSession?
+    var mirrored: Bool = false
     let onZoom: (Int) -> Void
     let onPanTilt: ([Int]) -> Void
     let onReset: () -> Void
@@ -98,7 +101,11 @@ struct FramingPad: View {
                     let r = rectSize(size)
                     let o = rectOrigin(size)
                     ZStack {
-                        if zoomFactor > 1 {
+                        if let session {
+                            PreviewView(session: session, mirrored: mirrored, gravity: .resizeAspectFill)
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                        }
+                        if zoomFactor > 1 && session == nil {
                             RoundedRectangle(cornerRadius: 4).fill(Color.accentColor.opacity(0.12))
                         }
                         RoundedRectangle(cornerRadius: 4).stroke(Color.accentColor, lineWidth: zoomFactor > 1 ? 2 : 1)

@@ -8,7 +8,15 @@ struct InspectorView: View {
     @AppStorage("inspector.framing") private var framingOpen = true
     @AppStorage("inspector.image") private var imageOpen = true
     @AppStorage("inspector.exposure") private var exposureOpen = false
-    @State private var vendorOpen: Set<String> = []
+    @AppStorage("inspector.presets") private var presetsOpen = true
+    @AppStorage("inspector.camera") private var cameraOpen = true
+    @AppStorage("inspector.device") private var deviceOpen = false
+    /// Open vendor sections, newline-separated (section titles come from profiles).
+    @AppStorage("inspector.vendor") private var vendorOpenRaw = ""
+    @State private var saving = false
+    @State private var newName = ""
+    @State private var renaming: Preset?
+    @State private var renameText = ""
     private var effects: VideoEffects { .shared }
 
     /// Everyday look controls. Everything else lives in Color & Exposure or Advanced.
@@ -18,7 +26,7 @@ struct InspectorView: View {
     var body: some View {
         Form {
             cameraSection
-            if hasViewControls || cam.state("focus-auto") != nil {
+            if hasViewControls || cam.centerStageSupported || cam.state("focus-auto") != nil || !vendorControls(in: "Framing").isEmpty {
                 fold("Framing", $framingOpen) {
                     viewRows
                     if cam.state("pantilt") != nil, let z = cam.state("zoom"), let lo = z.min?.first,
@@ -27,12 +35,23 @@ struct InspectorView: View {
                     }
                 }
             }
-            fold("Image", $imageOpen) { imageRows(Self.basicImage) }
+            if hasAny(Self.basicImage) || !vendorControls(in: "Image").isEmpty {
+                fold("Image", $imageOpen) {
+                    imageRows(Self.basicImage)
+                    vendorRows(vendorControls(in: "Image"))
+                }
+            }
             if hasAny(Self.exposureIDs) {
-                fold("Color & Exposure", $exposureOpen) { imageRows(Self.exposureIDs) }
+                fold("Color & Exposure", $exposureOpen) {
+                    imageRows(Self.exposureIDs)
+                    @Bindable var zebra = cam.zebra
+                    Toggle("Show Clipping", isOn: $zebra.isEnabled)
+                        .help("Stripes over areas that are blown out to pure white, so you can lower exposure until they disappear.")
+                }
             }
             if !effects.items.isEmpty { effectsSection }
-            if hasAny(advancedIDs) {
+            if let presets = cam.presets { presetsSection(presets) }
+            if hasAny(advancedIDs) || cam.state("roll") != nil {
                 fold("Advanced", $advanced) {
                     imageRows(advancedIDs)
                     if let r = cam.state("roll") { slider(r) }
@@ -40,6 +59,7 @@ struct InspectorView: View {
                 }
             }
             vendorSections
+            if cam.currentDevice != nil { deviceSection }
         }
         .formStyle(.grouped)
         .animation(.snappy, value: cam.value("zoom"))
@@ -69,6 +89,9 @@ struct InspectorView: View {
                     Text(title)
                     Spacer(minLength: 0)
                 }
+                // Pinned: section headers otherwise pick up different sizes depending on where they sit in the Form.
+                .font(.headline)
+                .foregroundStyle(.secondary)
                 .padding(.vertical, 6)
                 .contentShape(Rectangle())
             }
@@ -80,7 +103,7 @@ struct InspectorView: View {
     // MARK: Camera
 
     private var cameraSection: some View {
-        Section("Camera") {
+        fold("Camera", $cameraOpen) {
             Picker("Camera", selection: Binding(get: { cam.selectedID }, set: { if let id = $0 { cam.select(id) } })) {
                 ForEach(cam.cameras, id: \.uniqueID) { Text($0.localizedName).tag(Optional($0.uniqueID)) }
             }
@@ -160,6 +183,70 @@ struct InspectorView: View {
         }
     }
 
+    // MARK: Presets
+
+    private func presetsSection(_ presets: PresetStore) -> some View {
+        fold("Presets", $presetsOpen) {
+            ForEach(Array(presets.items.enumerated()), id: \.element.id) { i, p in
+                Button { presets.apply(p.id) } label: {
+                    LabeledContent {
+                        HStack(spacing: 8) {
+                            if presets.startupPresetID == p.id { Text("At launch").foregroundStyle(.secondary) }
+                            if i < 5 { Text("⌘\(i + 1)").foregroundStyle(.tertiary).monospacedDigit() }
+                        }
+                    } label: { Text(p.name) }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Apply \(p.name)")
+                .contextMenu {
+                    Button("Apply") { presets.apply(p.id) }
+                    Toggle("Apply at Launch", isOn: Binding(get: { presets.startupPresetID == p.id },
+                                                            set: { presets.startupPresetID = $0 ? p.id : nil }))
+                    Divider()
+                    Button("Rename…") { renameText = p.name; renaming = p }
+                    Button("Delete", role: .destructive) { presets.delete(p.id) }
+                }
+            }
+            if presets.items.isEmpty {
+                footnote("Save the current look, then switch back to it any time with ⌘1 to ⌘5.")
+            }
+            Button("Save Preset…") { newName = presets.defaultName; saving = true }
+            if let lock = cam.settingsLock {
+                @Bindable var lock = lock
+                Toggle("Keep These Settings", isOn: $lock.isEnabled)
+                    .help("Puts your settings back if another app, like Zoom or Teams, changes them.")
+                if lock.isEnabled {
+                    footnote(lock.lastReassert.map { "Last restored \($0.formatted(.relative(presentation: .named)))." }
+                             ?? "Your settings are restored if another app changes them.")
+                }
+            }
+        }
+        .alert("Save Preset", isPresented: $saving) {
+            TextField("Name", text: $newName)
+            Button("Save") { presets.save(name: newName) }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("Saves image, exposure, framing and format.") }
+        .alert("Rename Preset", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $renameText)
+            Button("Rename") { if let p = renaming { presets.rename(p.id, to: renameText) } }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    // MARK: Device
+
+    private var deviceSection: some View {
+        fold("Device", $deviceOpen) {
+            let info = cam.deviceInfo
+            LabeledContent("Name", value: info?.name ?? cam.currentDevice?.localizedName ?? "")
+            if let s = info?.serial { LabeledContent("Serial Number") { Text(s).textSelection(.enabled) } }
+            if let f = info?.firmware { LabeledContent("Firmware") { Text(f).textSelection(.enabled) } }
+            Button("Reset All Settings…", role: .destructive) { cam.confirmingReset = true }
+                .help("Return image, exposure and framing to the tuned defaults for this camera. Presets are kept.")
+        }
+    }
+
     // MARK: View
 
     private var hasViewControls: Bool { ["zoom", "pantilt", "roll"].contains { cam.state($0) != nil } }
@@ -173,7 +260,8 @@ struct InspectorView: View {
             FramingPad(zoomMin: zmin, zoomMax: zmax,
                        zoom: z == nil ? zmin : cam.value("zoom").first ?? zmin,
                        panTiltMin: lo, panTiltMax: hi, panTilt: cam.value("pantilt"),
-                       isLocked: false,
+                       isLocked: cam.autoFraming != .off,
+                       session: cam.session, mirrored: cam.mirrored,
                        onZoom: { cam.set("zoom", [$0]) },
                        onPanTilt: { cam.set("pantilt", $0) },
                        onReset: { cam.resetView() })
@@ -184,12 +272,17 @@ struct InspectorView: View {
 
     @ViewBuilder
     private var viewRows: some View {
+        FramingModeControls(cam: cam)
+        if cam.canAutoFrame, cam.autoFraming != .off {
+            footnote(cam.isSubjectDetected ? "Following you. Manual framing is paused." : "Looking for a person…")
+        }
         framingRow
         if let af = cam.state("focus-auto") {
             Toggle(af.control.name, isOn: Binding(get: { autoOn(af.id) }, set: { v in withAnimation(.snappy) { cam.set(af.id, [v ? 1 : 0]) } }))
                 .help("Let the camera focus by itself. Turn off to set focus manually.")
             if let f = cam.state("focus"), !autoOn("focus-auto") { slider(f) }
         }
+        vendorRows(vendorControls(in: "Framing"))
         if hasViewControls {
             Button("Reset View") { cam.resetView() }
                 .help("Return zoom and framing to the full field of view.")
@@ -238,45 +331,63 @@ struct InspectorView: View {
 
     // MARK: Vendor
 
+    /// Profile sections named after a built-in fold ("image", "Framing") render inside it.
+    private static let builtInSections: Set<String> = ["framing", "image"]
+
+    private func vendorControls(in section: String) -> [ProfileControl] {
+        cam.profileControls.filter { $0.section.lowercased() == section.lowercased() }
+    }
+
     private var vendorGroups: [(String, [ProfileControl])] {
         var order: [String] = [], by: [String: [ProfileControl]] = [:]
-        for c in cam.profileControls {
-            if by[c.section] == nil { order.append(c.section) }
-            by[c.section, default: []].append(c)
+        for c in cam.profileControls where !Self.builtInSections.contains(c.section.lowercased()) {
+            let key = c.section.lowercased()
+            if by[key] == nil { order.append(c.section) }
+            by[key, default: []].append(c)
         }
-        return order.map { ($0, by[$0]!) }
+        return order.map { ($0, by[$0.lowercased()]!) }
+    }
+
+    private func vendorOpen(_ section: String) -> Binding<Bool> {
+        Binding(get: { vendorOpenRaw.split(separator: "\n").contains { $0 == section } },
+                set: { open in
+                    var set = vendorOpenRaw.split(separator: "\n").map(String.init).filter { $0 != section }
+                    if open { set.append(section) }
+                    vendorOpenRaw = set.joined(separator: "\n")
+                })
     }
 
     private var vendorSections: some View {
         ForEach(vendorGroups, id: \.0) { section, controls in
-            fold(section, Binding(get: { vendorOpen.contains(section) },
-                                  set: { if $0 { vendorOpen.insert(section) } else { vendorOpen.remove(section) } })) {
-                ForEach(controls) { c in
-                    let enabled = cam.isProfileControlEnabled(c.id)
-                    Group {
-                        switch c.ui.kind {
-                        case .toggle:
-                            Toggle(c.title, isOn: Binding(get: { (cam.profileValues[c.id] ?? 0) != 0 },
-                                                          set: { cam.setProfileValue(c.id, $0 ? 1 : 0) }))
-                        case .picker:
-                            Picker(c.title, selection: Binding(get: { Int((cam.profileValues[c.id] ?? 0).rounded()) },
-                                                               set: { cam.setProfileValue(c.id, Double($0)) })) {
-                                ForEach(c.ui.options ?? [], id: \.value) { Text($0.label).tag($0.value) }
-                            }
-                        case .slider:
-                            if let lo = c.ui.min, let hi = c.ui.max, hi > lo {
-                                let value = Binding(get: { cam.profileValues[c.id] ?? c.ui.default ?? lo },
-                                                    set: { cam.setProfileValue(c.id, $0) })
-                                sliderRow(name: c.title, valueText: c.formatDisplay(value.wrappedValue),
-                                          value: value, range: lo ... hi, step: c.ui.step ?? 1,
-                                          onReset: { if let d = c.ui.default { cam.setProfileValue(c.id, d) } })
-                            }
-                        }
+            fold(section, vendorOpen(section)) { vendorRows(controls) }
+        }
+    }
+
+    private func vendorRows(_ controls: [ProfileControl]) -> some View {
+        ForEach(controls) { c in
+            let enabled = cam.isProfileControlEnabled(c.id)
+            Group {
+                switch c.ui.kind {
+                case .toggle:
+                    Toggle(c.title, isOn: Binding(get: { (cam.profileValues[c.id] ?? 0) != 0 },
+                                                  set: { v in withAnimation(.snappy) { cam.setProfileValue(c.id, v ? 1 : 0) } }))
+                case .picker:
+                    Picker(c.title, selection: Binding(get: { Int((cam.profileValues[c.id] ?? 0).rounded()) },
+                                                       set: { v in withAnimation(.snappy) { cam.setProfileValue(c.id, Double(v)) } })) {
+                        ForEach(c.ui.options ?? [], id: \.value) { Text($0.label).tag($0.value) }
                     }
-                    .disabled(!enabled)
-                    .help(enabled ? c.title : "\(c.title) is unavailable in the current mode.")
+                case .slider:
+                    if let lo = c.ui.min, let hi = c.ui.max, hi > lo {
+                        let value = Binding(get: { cam.profileValues[c.id] ?? c.ui.default ?? lo },
+                                            set: { cam.setProfileValue(c.id, $0) })
+                        sliderRow(name: c.title, valueText: c.formatDisplay(value.wrappedValue),
+                                  value: value, range: lo ... hi, step: c.ui.step ?? 1,
+                                  onReset: { if let d = c.ui.default { cam.setProfileValue(c.id, d) } })
+                    }
                 }
             }
+            .disabled(!enabled)
+            .help(enabled ? "" : "\(c.title) is unavailable in the current mode.")
         }
     }
 

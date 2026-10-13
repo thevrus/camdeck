@@ -56,9 +56,16 @@ public final class PresetStore {
         try? data.write(to: fileURL, options: .atomic)
     }
 
+    public var defaultName: String { "Preset \(items.count + 1)" }
+
+    private static func clean(_ name: String) -> String? {
+        let t = name.trimmingCharacters(in: .whitespaces)
+        return t.isEmpty ? nil : t
+    }
+
     @discardableResult
     public func save(name: String) -> Preset {
-        let p = Preset(name: name, settings: capture())
+        let p = Preset(name: Self.clean(name) ?? defaultName, settings: capture())
         items.append(p)
         persist()
         return p
@@ -82,9 +89,10 @@ public final class PresetStore {
         persist()
     }
 
+    /// Blank names are ignored.
     public func rename(_ id: UUID, to name: String) {
-        guard let i = items.firstIndex(where: { $0.id == id }) else { return }
-        items[i].name = name
+        guard let trimmed = Self.clean(name), let i = items.firstIndex(where: { $0.id == id }) else { return }
+        items[i].name = trimmed
         persist()
     }
 

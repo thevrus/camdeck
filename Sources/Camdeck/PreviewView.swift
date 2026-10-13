@@ -4,11 +4,12 @@ import SwiftUI
 struct PreviewView: NSViewRepresentable {
     let session: AVCaptureSession
     let mirrored: Bool
+    var gravity: AVLayerVideoGravity = .resizeAspect
 
     func makeNSView(context: Context) -> PreviewNSView {
         let v = PreviewNSView()
         v.previewLayer.session = session
-        v.previewLayer.videoGravity = .resizeAspect
+        v.previewLayer.videoGravity = gravity
         return v
     }
 

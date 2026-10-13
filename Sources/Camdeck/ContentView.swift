@@ -1,4 +1,5 @@
 import SwiftUI
+import UVCKit
 
 struct ContentView: View {
     @Bindable var cam: CameraController
@@ -37,7 +38,24 @@ struct ContentView: View {
             .navigationTitle("Camdeck")
             .navigationSubtitle(subtitle)
             .frame(minWidth: 900, minHeight: 560)
+            .overlay(alignment: .bottom) {
+                if let t = cam.toast {
+                    Label(t, systemImage: "checkmark.circle.fill")
+                        .font(.callout.weight(.medium))
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .glassEffect(.regular, in: .capsule)
+                        .padding(.bottom, 20)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.snappy, value: cam.toast)
             .task { cam.start() }
+            .confirmationDialog("Reset all settings?", isPresented: $cam.confirmingReset, titleVisibility: .visible) {
+                Button("Reset", role: .destructive) { cam.restoreDefaults() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Image, exposure, framing and format return to the defaults for this camera. Your presets are kept.")
+            }
     }
 
     private var subtitle: String {
@@ -81,7 +99,50 @@ struct ContentView: View {
                                    description: Text("Plug in a UVC camera and it will appear here."))
                 .environment(\.colorScheme, .dark)
         } else {
-            PreviewView(session: cam.session, mirrored: cam.mirrored)
+            PreviewView(session: cam.session, mirrored: cam.mirrored, gravity: .resizeAspectFill)
+                .overlay { ZebraOverlay(zebra: cam.zebra, mirrored: cam.mirrored) }
+        }
+    }
+}
+
+/// Diagonal stripes over blown-out areas. The mask is analyzed from the full frame, so it is
+/// filled into the same aspect-fill geometry as the preview and mirrored with it.
+/// Reads `zebra` itself so a new mask (~5 Hz) only invalidates this view, not ContentView.
+private struct ZebraOverlay: View {
+    let zebra: ZebraAnalyzer
+    let mirrored: Bool
+
+    var body: some View {
+        if zebra.isEnabled, let mask = zebra.mask {
+            ZebraStripes()
+                .mask {
+                    Image(decorative: mask, scale: 1)
+                        .resizable()
+                        .interpolation(.none)
+                        .aspectRatio(contentMode: .fill)
+                        .scaleEffect(x: mirrored ? -1 : 1)
+                }
+                .clipped()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// No inputs, so the stripe path is only redrawn when the size changes, not per mask.
+private struct ZebraStripes: View {
+    var body: some View {
+        Canvas { ctx, size in
+            var stripes = Path()
+            let step: CGFloat = 8
+            var x = -size.height
+            while x < size.width {
+                stripes.move(to: CGPoint(x: x, y: size.height))
+                stripes.addLine(to: CGPoint(x: x + size.height, y: 0))
+                x += step
+            }
+            ctx.stroke(stripes, with: .color(.white.opacity(0.85)), lineWidth: 2.5)
+            ctx.stroke(stripes.offsetBy(dx: step / 2, dy: 0), with: .color(.black.opacity(0.55)), lineWidth: 2.5)
         }
     }
 }

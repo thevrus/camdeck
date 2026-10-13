@@ -76,6 +76,8 @@ public final class UVCTransport: @unchecked Sendable {
     private let scheduler: UVCRequestScheduler
     /// Held across a read-modify-write so two writers cannot interleave.
     private let rmwLock = NSRecursiveLock()
+    /// GET_LEN answers keyed by unit << 8 | selector; fixed per device, so asked once.
+    private let lengths = OSAllocatedUnfairLock(initialState: [UInt16: Int]())
     private static let log = Logger(subsystem: "app.camdeck.uvckit", category: "transport")
 
     public init(channel: UVCRequestChannel, topology: UVCTopology,
@@ -107,11 +109,15 @@ public final class UVCTransport: @unchecked Sendable {
         _ = try transfer(0x21, 0x01, unit: unit, selector: selector, data: data)
     }
 
-    /// GET_LEN (u16 LE).
+    /// GET_LEN (u16 LE), cached per (unit, selector).
     public func length(unit: UInt8, selector: UInt8) throws -> Int {
+        let key = UInt16(unit) << 8 | UInt16(selector)
+        if let n = lengths.withLock({ $0[key] }) { return n }
         let b = try get(unit: unit, selector: selector, length: 2, request: .len)
         guard b.count >= 2 else { throw UVCError.io(-1) }
-        return Int(b[0]) | Int(b[1]) << 8
+        let n = Int(b[0]) | Int(b[1]) << 8
+        lengths.withLock { $0[key] = n }
+        return n
     }
 
     /// Reads `length` bytes, lets `modify` change them, writes them back, all under one lock.
