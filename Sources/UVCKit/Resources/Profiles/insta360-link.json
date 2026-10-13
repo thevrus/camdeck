@@ -1,0 +1,101 @@
+{
+  "name": "Insta360 Link",
+  "match": { "vendorID": "0x2E1A" },
+  "units": {
+    "xu9": "faf1672d-b71b-4793-8c91-7b1c9b7f95f8"
+  },
+  "naturalDefaults": {
+    "standard": { "hue": 0, "brightness": 50, "contrast": 50, "saturation": 50, "sharpness": 26, "focus-auto": 1, "wb-auto": 1, "powerline": 2 },
+    "profile": { "aeMode": 2, "ev": 0.6, "hdr": 1 }
+  },
+  "forbiddenSelectors": [
+    { "unit": "xu9", "selector": 17, "reason": "USB mode switch / firmware path" }
+  ],
+  "controls": [
+    {
+      "id": "aeMode",
+      "title": "Exposure mode",
+      "symbol": "a.circle",
+      "section": "image",
+      "unit": "xu9",
+      "selector": 30,
+      "encoding": "u8",
+      "ui": {
+        "kind": "picker",
+        "options": [
+          { "label": "Auto", "value": 2 },
+          { "label": "Manual", "value": 1 }
+        ]
+      }
+    },
+    {
+      "id": "ev",
+      "title": "Exposure compensation",
+      "symbol": "plusminus.circle",
+      "section": "image",
+      "unit": "xu9",
+      "selector": 9,
+      "encoding": "i16le",
+      "ui": { "kind": "slider", "min": -3.0, "max": 3.0, "step": 0.1, "scale": 100, "format": "%+.1f EV", "default": 0 },
+      "enabledWhen": { "control": "aeMode", "equals": 2 }
+    },
+    {
+      "id": "iso",
+      "title": "ISO",
+      "symbol": "dial.medium",
+      "section": "image",
+      "unit": "xu9",
+      "selector": 25,
+      "encoding": "u16le",
+      "ui": {
+        "kind": "picker",
+        "snapToNearest": true,
+        "options": [
+          { "label": "100", "value": 100 },
+          { "label": "200", "value": 200 },
+          { "label": "400", "value": 400 },
+          { "label": "800", "value": 800 },
+          { "label": "1600", "value": 1600 },
+          { "label": "3200", "value": 3200 },
+          { "label": "6400", "value": 6400 }
+        ]
+      },
+      "enabledWhen": { "control": "aeMode", "equals": 1 }
+    },
+    {
+      "id": "shutter",
+      "title": "Shutter",
+      "symbol": "camera.shutter.button",
+      "section": "image",
+      "unit": "xu9",
+      "selector": 29,
+      "encoding": "u16le",
+      "ui": {
+        "kind": "picker",
+        "snapToNearest": true,
+        "options": [
+          { "label": "1/30", "value": 30 },
+          { "label": "1/60", "value": 60 },
+          { "label": "1/100", "value": 100 },
+          { "label": "1/125", "value": 125 },
+          { "label": "1/250", "value": 250 },
+          { "label": "1/500", "value": 500 },
+          { "label": "1/1000", "value": 1000 },
+          { "label": "1/2000", "value": 2000 }
+        ]
+      },
+      "enabledWhen": { "control": "aeMode", "equals": 1 }
+    },
+    {
+      "id": "hdr",
+      "title": "HDR",
+      "symbol": "sun.max",
+      "section": "image",
+      "unit": "xu9",
+      "selector": 27,
+      "encoding": { "type": "bit-in-u16le", "bit": 2 },
+      "rmw": true,
+      "ui": { "kind": "toggle" }
+    }
+  ]
+}
