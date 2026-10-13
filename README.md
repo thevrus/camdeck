@@ -56,22 +56,14 @@ No. Nothing is added to your system.
 **What Mac do I need?**
 A Mac running macOS 26. It works on Apple Silicon.
 
-## Get started
+## Install
 
-Camdeck is built from source for now. You'll need macOS 26 and Apple's free developer tools (Xcode).
+1. [Download the latest Camdeck.zip](https://github.com/thevrus/camdeck/releases/latest) and double-click it.
+2. Drag **Camdeck** into your Applications folder.
+3. Open it. The first time, macOS may say it can't verify the app. Right-click Camdeck, choose **Open**, then **Open** again. (On macOS 26 you may need System Settings → Privacy & Security → **Open Anyway**.) You only do this once.
+4. Allow camera access when asked, plug in your webcam and go.
 
-1. Open the Terminal app.
-2. Paste these lines, one at a time:
-
-```sh
-git clone https://github.com/thevrus/camdeck.git
-cd camdeck
-make run
-```
-
-3. Camdeck opens. Plug in your webcam and go.
-
-Want to keep the app? Run `make app` instead. It creates `build/Camdeck.app`, which you can drag into your Applications folder.
+Camdeck updates itself. When a new version is out, it downloads and installs quietly. You can also choose **Camdeck → Check for Updates…** any time.
 
 ## License
 
@@ -104,6 +96,8 @@ Details in [docs/adr-001-camera-drivers.md](docs/adr-001-camera-drivers.md). Lin
 
 ## Build and test
 
+You need macOS 26 and Xcode 26.
+
 ```sh
 make app      # builds build/Camdeck.app
 make run      # builds and opens it
@@ -111,6 +105,14 @@ make test     # runs the UVCKit test suite
 ```
 
 The `uvcctl` command line tool dumps camera descriptors and reads or writes controls. Use it when adding support for a new camera.
+
+## Shipping an update
+
+Updates use [Sparkle](https://sparkle-project.org). The signing key lives in the maintainer's keychain; the feed is `appcast.xml` in this repo.
+
+```sh
+make release VERSION=0.2.0   # build, sign, update appcast.xml, publish a GitHub Release
+```
 
 ## Adding a camera
 

@@ -23,6 +23,7 @@ struct CamdeckApp: App {
         }
         .windowResizability(.contentMinSize)
         .commands {
+            CommandGroup(after: .appInfo) { CheckForUpdatesButton() }
             CommandMenu("Camera") {
                 @Bindable var cam = cam
                 Button("Reset View") { cam.resetView() }
@@ -73,6 +74,7 @@ struct CamdeckApp: App {
             Button("Video Effects…") { effects.openSystemPanel() }
             Divider()
             OpenMainWindowButton()
+            CheckForUpdatesButton()
             Divider()
             Button("Quit Camdeck") { NSApp.terminate(nil) }
                 .keyboardShortcut("q")
