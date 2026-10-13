@@ -199,10 +199,17 @@ public final class UVCDevice: @unchecked Sendable {
     /// Whether this device's descriptor has the unit the control needs.
     public func supports(_ c: ProfileControl) -> Bool { unitID(forGUID: profile.guid(for: c.unit)) != nil }
 
+    /// Bytes to transfer for a profile control: the encoding's fixed size, or GET_LEN when the device decides.
+    private func profileLength(_ c: ProfileControl, unit u: UInt8, selector sel: UInt8) throws -> Int {
+        if let n = c.encoding.size { return n }
+        return try transport.length(unit: u, selector: sel)
+    }
+
     /// Reads one profile control; returns the normalized wire value.
     public func readProfile(_ c: ProfileControl) throws -> Int {
         guard let u = unitID(forGUID: profile.guid(for: c.unit)) else { throw UVCError.noUnit(c.id) }
-        let b = try get(unit: u, selector: UInt8(c.selector), length: c.encoding.size)
+        let sel = UInt8(c.selector)
+        let b = try get(unit: u, selector: sel, length: profileLength(c, unit: u, selector: sel))
         guard let v = c.encoding.decode(b) else { throw UVCError.io(-1) }
         return c.normalize(v)
     }
@@ -212,7 +219,14 @@ public final class UVCDevice: @unchecked Sendable {
         guard let u = unitID(forGUID: profile.guid(for: c.unit)) else { throw UVCError.noUnit(c.id) }
         let sel = UInt8(c.selector)
         try transport.withRMWLock {
-            let current: [UInt8]? = try c.needsReadModifyWrite ? get(unit: u, selector: sel, length: c.encoding.size) : nil
+            var current: [UInt8]?
+            if c.needsReadModifyWrite {
+                let n = try profileLength(c, unit: u, selector: sel)
+                let b = try get(unit: u, selector: sel, length: n)
+                // A device-sized buffer goes back whole, so a short read must not become a short write.
+                if c.encoding.size == nil, b.count != n { throw UVCError.io(-1) }
+                current = b
+            }
             guard let data = c.encoding.encode(c.normalize(wire), current: current) else { throw UVCError.io(-1) }
             try set(unit: u, selector: sel, data: data)
         }

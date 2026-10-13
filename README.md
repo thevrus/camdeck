@@ -36,6 +36,7 @@ Any UVC webcam gets image, exposure, zoom, focus and white balance on day one. T
 | --- | --- | --- | --- |
 | Insta360 Link 2C | Insta360 Link Controller | Digital pan/tilt, ISO, shutter, HDR, exposure mode, serial and firmware info | Verified on hardware |
 | Insta360 Link 2, Link | Insta360 Link Controller | Same protocol family | Untested |
+| AnkerWork C310, PowerConf C200 | AnkerWork app | Field of view, HDR and flip (C200), face focus and exposure, mic noise reduction and pickup (C310) | Experimental, unverified on hardware |
 | OBSBOT Tiny 2, Tiny SE, Meet | OBSBOT Center | Mechanical PTZ via TLV protocol | Planned |
 | Opal Tadpole, C1 | Opal Composer | | Planned |
 

@@ -1,0 +1,50 @@
+{
+  "name": "Anker PowerConf C200",
+  "match": { "vendorID": "0x291A", "productIDs": ["0x3369"] },
+  "units": {
+    "xu6": "6cb3abac-b431-5316-c4ac-d27a1f11a12e"
+  },
+  "forbiddenSelectors": [],
+  "controls": [
+    {
+      "id": "fov",
+      "title": "Field of View",
+      "symbol": "viewfinder",
+      "section": "Framing",
+      "unit": "xu6",
+      "selector": 16,
+      "encoding": { "type": "u16le-at-offset", "offset": 2 },
+      "rmw": true,
+      "ui": {
+        "kind": "picker",
+        "options": [
+          { "label": "65° Narrow", "value": 65 },
+          { "label": "78° Medium", "value": 78 },
+          { "label": "95° Wide", "value": 95 }
+        ]
+      }
+    },
+    {
+      "id": "hdr",
+      "title": "HDR",
+      "symbol": "sun.max",
+      "section": "image",
+      "unit": "xu6",
+      "selector": 19,
+      "encoding": { "type": "u8-at-offset", "offset": 0 },
+      "rmw": true,
+      "ui": { "kind": "toggle" }
+    },
+    {
+      "id": "horizontalFlip",
+      "title": "Mirror Video",
+      "symbol": "arrow.left.and.right.righttriangle.left.righttriangle.right",
+      "section": "image",
+      "unit": "xu6",
+      "selector": 17,
+      "encoding": { "type": "u8-at-offset", "offset": 0 },
+      "rmw": true,
+      "ui": { "kind": "toggle" }
+    }
+  ]
+}

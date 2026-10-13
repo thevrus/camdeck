@@ -6,7 +6,7 @@ Profiles are JSON files in `Sources/UVCKit/Resources/Profiles/`, loaded through 
 
 | Key | Type | Notes |
 | --- | --- | --- |
-| `name` | string | Shown as the vendor section title. |
+| `name` | string | Human-readable profile name. |
 | `match.vendorID` | int or `"0x2E1A"` | Required. |
 | `match.productIDs` | array, optional | Omit to match every product of the vendor. |
 | `units` | object | Alias to extension-unit GUID. Unit IDs are never written down: they are resolved at runtime from the parsed descriptor (`UVCTopology.extensionUnits`). |
@@ -21,10 +21,10 @@ Profiles are JSON files in `Sources/UVCKit/Resources/Profiles/`, loaded through 
 | --- | --- |
 | `id` | Stable identifier (used by `uvcctl` and `enabledWhen`). |
 | `title`, `symbol` | UI label, SF Symbol name. |
-| `section` | `"image"` puts it in the inspector Image section; other names form a section of their own. |
+| `section` | `"image"` or `"Framing"` (case-insensitive) puts it in that built-in inspector section; any other name forms a collapsible section of its own, titled with that name. |
 | `unit`, `selector` | Where it lives. |
-| `encoding` | `"u8"`, `"u16le"`, `"i16le"`, or `{"type": "bit-in-u16le", "bit": N}`. The bit form is one bit of a 2-byte feature mask; value 0/1. |
-| `rmw` | `true`: read the current bytes, change only this control, write back. Required for `bit-in-u16le` (validated). |
+| `encoding` | `"u8"`, `"u16le"`, `"i16le"`, `{"type": "bit-in-u16le", "bit": N}`, `{"type": "u8-at-offset", "offset": N}` or `{"type": "u16le-at-offset", "offset": N}`. The bit form is one bit of a 2-byte feature mask; value 0/1. The offset forms are one byte, or a little-endian u16 at bytes N and N+1, inside a buffer whose length the device reports (GET_LEN, asked on every read and write); a write sends the whole buffer back with only those bytes changed. |
+| `rmw` | `true`: read the current bytes, change only this control, write back. Required for `bit-in-u16le`, `u8-at-offset` and `u16le-at-offset` (validated). |
 | `enabledWhen` | `{"control": "<id>", "equals": <wire value>}`. UI disables (never hides) the control otherwise; `uvcctl set` refuses. |
 | `ui` | See below. |
 
@@ -45,4 +45,4 @@ GET_MIN/MAX/RES are not used for extension-unit selectors (they return zeros); r
 
 ## Example
 
-See `Sources/UVCKit/Resources/Profiles/insta360-link.json`.
+See `Sources/UVCKit/Resources/Profiles/insta360-link.json`. Offset encodings: `anker-powerconf-c200.json`, `ankerwork-c310.json`.

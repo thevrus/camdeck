@@ -29,8 +29,12 @@ public enum ProfileEncoding: Codable, Sendable, Equatable {
     case i16le
     /// One bit of a little-endian u16 feature mask. Writes need the current mask (rmw).
     case bitInU16le(bit: Int)
+    /// One byte at `offset` inside a buffer whose length the device reports (GET_LEN). Writes need the current buffer (rmw).
+    case u8AtOffset(offset: Int)
+    /// Little-endian u16 at `offset`, `offset + 1` inside a GET_LEN-sized buffer. Writes need the current buffer (rmw).
+    case u16leAtOffset(offset: Int)
 
-    private enum Keys: String, CodingKey { case type, bit }
+    private enum Keys: String, CodingKey { case type, bit, offset }
 
     public init(from decoder: Decoder) throws {
         if let s = try? decoder.singleValueContainer().decode(String.self) {
@@ -44,14 +48,23 @@ public enum ProfileEncoding: Codable, Sendable, Equatable {
         }
         let c = try decoder.container(keyedBy: Keys.self)
         let type = try c.decode(String.self, forKey: .type)
-        guard type == "bit-in-u16le" else {
+        switch type {
+        case "bit-in-u16le":
+            let bit = try c.decode(Int.self, forKey: .bit)
+            guard (0 ..< 16).contains(bit) else {
+                throw DecodingError.dataCorruptedError(forKey: .bit, in: c, debugDescription: "bit out of range")
+            }
+            self = .bitInU16le(bit: bit)
+        case "u8-at-offset", "u16le-at-offset":
+            let offset = try c.decode(Int.self, forKey: .offset)
+            // GET_LEN is a u16, so no buffer is longer than 65535 bytes.
+            guard (0 ..< 0xFFFF).contains(offset) else {
+                throw DecodingError.dataCorruptedError(forKey: .offset, in: c, debugDescription: "offset out of range")
+            }
+            self = type == "u8-at-offset" ? .u8AtOffset(offset: offset) : .u16leAtOffset(offset: offset)
+        default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: "unknown encoding \(type)")
         }
-        let bit = try c.decode(Int.self, forKey: .bit)
-        guard (0 ..< 16).contains(bit) else {
-            throw DecodingError.dataCorruptedError(forKey: .bit, in: c, debugDescription: "bit out of range")
-        }
-        self = .bitInU16le(bit: bit)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -63,23 +76,50 @@ public enum ProfileEncoding: Codable, Sendable, Equatable {
             var c = encoder.container(keyedBy: Keys.self)
             try c.encode("bit-in-u16le", forKey: .type)
             try c.encode(bit, forKey: .bit)
+        case .u8AtOffset(let offset):
+            var c = encoder.container(keyedBy: Keys.self)
+            try c.encode("u8-at-offset", forKey: .type)
+            try c.encode(offset, forKey: .offset)
+        case .u16leAtOffset(let offset):
+            var c = encoder.container(keyedBy: Keys.self)
+            try c.encode("u16le-at-offset", forKey: .type)
+            try c.encode(offset, forKey: .offset)
         }
     }
 
-    /// Bytes on the wire.
-    public var size: Int { self == .u8 ? 1 : 2 }
+    /// Bytes on the wire, or nil when the device decides (ask GET_LEN).
+    public var size: Int? {
+        switch self {
+        case .u8: return 1
+        case .u16le, .i16le, .bitInU16le: return 2
+        case .u8AtOffset, .u16leAtOffset: return nil
+        }
+    }
+
+    /// Bytes needed in the buffer for this encoding to decode or encode.
+    private var minimumCount: Int {
+        switch self {
+        case .u8: return 1
+        case .u16le, .i16le, .bitInU16le: return 2
+        case .u8AtOffset(let o): return o + 1
+        case .u16leAtOffset(let o): return o + 2
+        }
+    }
 
     public func decode(_ b: [UInt8]) -> Int? {
-        guard b.count >= size else { return nil }
+        guard b.count >= minimumCount else { return nil }
         switch self {
         case .u8: return Int(b[0])
         case .u16le: return Int(b[0]) | Int(b[1]) << 8
         case .i16le: return Int(Int16(bitPattern: UInt16(b[0]) | UInt16(b[1]) << 8))
         case .bitInU16le(let bit): return (Int(b[0]) | Int(b[1]) << 8) >> bit & 1
+        case .u8AtOffset(let o): return Int(b[o])
+        case .u16leAtOffset(let o): return Int(b[o]) | Int(b[o + 1]) << 8
         }
     }
 
-    /// `current` is the bytes just read from the device; required for bit encodings, ignored otherwise.
+    /// `current` is the bytes just read from the device; required for bit and offset encodings, ignored otherwise.
+    /// Offset encodings return the whole `current` buffer with only their byte(s) replaced.
     public func encode(_ v: Int, current: [UInt8]?) -> [UInt8]? {
         switch self {
         case .u8: return [UInt8(clamping: v)]
@@ -94,6 +134,15 @@ public enum ProfileEncoding: Codable, Sendable, Equatable {
             var mask = UInt16(current[0]) | UInt16(current[1]) << 8
             if v != 0 { mask |= 1 << UInt16(bit) } else { mask &= ~(1 << UInt16(bit)) }
             return [UInt8(mask & 0xFF), UInt8(mask >> 8)]
+        case .u8AtOffset(let o):
+            guard var out = current, out.count >= minimumCount else { return nil }
+            out[o] = UInt8(clamping: v)
+            return out
+        case .u16leAtOffset(let o):
+            guard var out = current, out.count >= minimumCount else { return nil }
+            let u = UInt16(clamping: v)
+            out[o] = UInt8(u & 0xFF); out[o + 1] = UInt8(u >> 8)
+            return out
         }
     }
 }
@@ -264,7 +313,13 @@ public struct DeviceProfile: Codable, Sendable, Equatable {
             guard seen.insert(c.id).inserted else { throw fail("duplicate id") }
             guard units[c.unit] != nil || UUID(uuidString: c.unit) != nil else { throw fail("unknown unit \(c.unit)") }
             guard (0 ... 255).contains(c.selector) else { throw fail("selector out of range") }
-            if case .bitInU16le = c.encoding, !c.needsReadModifyWrite { throw fail("bit encoding requires rmw") }
+            switch c.encoding {
+            case .bitInU16le:
+                if !c.needsReadModifyWrite { throw fail("bit encoding requires rmw") }
+            case .u8AtOffset, .u16leAtOffset:
+                if !c.needsReadModifyWrite { throw fail("offset encoding requires rmw") }
+            case .u8, .u16le, .i16le: break
+            }
             switch c.ui.kind {
             case .slider:
                 guard let lo = c.ui.min, let hi = c.ui.max, hi > lo else { throw fail("slider needs min < max") }

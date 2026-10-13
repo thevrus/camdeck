@@ -67,3 +67,10 @@ UVCTransport  (IOKit EP0 DeviceRequest, no open/seize)
 - Zoom: standard CT 0x0B works (also reported in XU9 sel 2 byte 50).
 - CT pan/tilt (0x0D): accepted, no effect, reverts after about 2 s. `Insta360LinkDriver` marks it `.ctPanTiltIneffective` for PID 0x4C03, so `GenericUVCDriver` does not offer CT reframe.
 - Device info: XU9 sel 3 (firmware at offset 97 len 15 "v3.2.7.8_build2", UUID at 33 len 36, model at 170 len 10 "Insta Puc2") and sel 12 (serial, 32 bytes). Fixtures: `Tests/UVCKitTests/Fixtures/link2c_xu9_sel3.txt`, `link2c_xu9_sel12.txt`.
+
+## Addendum: scalars inside a device-sized buffer (2026-10-13)
+- Context: Anker cameras (AnkerWork C310, PowerConf C200; see [anker-protocol.md](anker-protocol.md)) keep each vendor control as 1 or 2 bytes inside an opaque XU buffer. Its length is whatever GET_LEN reports: 7 bytes for C310 field of view, 60 for C200. Every existing encoding has a fixed size known to the JSON.
+- Decision: two new profile encodings, `u8-at-offset` and `u16le-at-offset`. `ProfileEncoding.size` is nil for them, and `UVCDevice.readProfile/writeProfile` then ask GET_LEN. Writes are always read-modify-write of the whole buffer (validated, as for `bit-in-u16le`). A read that comes back shorter than GET_LEN is never written back.
+- Why not a code driver: by this ADR's own rule this is a plain scalar or flag. There is no sequencing, no CRC, no multi-step state, and no capability beyond `profileControls`. Only the buffer length is dynamic. A driver would duplicate the profile interpreter just to call GET_LEN.
+- Generalizes to the same shape elsewhere ("short opaque command in a vendor XU"), for example Razer Kiyo Pro/Ultra and Dell WB7022. Nothing is implemented for those here. Each still needs its own source-verified offsets.
+- Limit: an offset write keeps every other byte as read. If a firmware wants fixed marker bytes on SET that GET_CUR does not echo, this encoding cannot express it, and that control needs a code driver or a further schema extension.

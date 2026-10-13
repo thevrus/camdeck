@@ -1,0 +1,90 @@
+{
+  "name": "AnkerWork C310",
+  "match": { "vendorID": "0x291A", "productIDs": ["0x3367"] },
+  "units": {
+    "xu": "41769ea2-04de-e347-8b2b-f4341aff003b"
+  },
+  "forbiddenSelectors": [],
+  "controls": [
+    {
+      "id": "fov",
+      "title": "Field of View",
+      "symbol": "viewfinder",
+      "section": "Framing",
+      "unit": "xu",
+      "selector": 16,
+      "encoding": { "type": "u16le-at-offset", "offset": 2 },
+      "rmw": true,
+      "ui": {
+        "kind": "picker",
+        "options": [
+          { "label": "Narrow", "value": 65 },
+          { "label": "Medium", "value": 78 },
+          { "label": "Wide", "value": 95 }
+        ]
+      }
+    },
+    {
+      "id": "faceFocus",
+      "title": "Face Focus",
+      "symbol": "person.crop.square",
+      "section": "Framing",
+      "unit": "xu",
+      "selector": 27,
+      "encoding": { "type": "u8-at-offset", "offset": 0 },
+      "rmw": true,
+      "ui": { "kind": "toggle" }
+    },
+    {
+      "id": "faceExposure",
+      "title": "Face Exposure",
+      "symbol": "face.smiling",
+      "section": "image",
+      "unit": "xu",
+      "selector": 11,
+      "encoding": { "type": "u8-at-offset", "offset": 0 },
+      "rmw": true,
+      "ui": { "kind": "toggle" }
+    },
+    {
+      "id": "faceExposureAmount",
+      "title": "Face Exposure Amount",
+      "symbol": "plusminus.circle",
+      "section": "image",
+      "unit": "xu",
+      "selector": 11,
+      "encoding": { "type": "u8-at-offset", "offset": 1 },
+      "rmw": true,
+      "ui": { "kind": "slider", "min": 0, "max": 100, "step": 1, "format": "%g", "default": 35 },
+      "enabledWhen": { "control": "faceExposure", "equals": 1 }
+    },
+    {
+      "id": "micNoiseReduction",
+      "title": "AI Noise Reduction",
+      "symbol": "waveform.badge.minus",
+      "section": "Microphone",
+      "unit": "xu",
+      "selector": 29,
+      "encoding": { "type": "u8-at-offset", "offset": 0 },
+      "rmw": true,
+      "ui": { "kind": "toggle" }
+    },
+    {
+      "id": "micPickup",
+      "title": "Pickup Pattern",
+      "symbol": "mic",
+      "section": "Microphone",
+      "unit": "xu",
+      "selector": 31,
+      "encoding": { "type": "u16le-at-offset", "offset": 0 },
+      "rmw": true,
+      "ui": {
+        "kind": "picker",
+        "options": [
+          { "label": "360°", "value": 0 },
+          { "label": "90°", "value": 90 }
+        ]
+      }
+    }
+  ]
+}
