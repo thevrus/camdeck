@@ -10,13 +10,17 @@ final class URLCommandHandler {
     var cam: CameraController?
     private static let log = Logger(subsystem: "app.camdeck", category: "url")
 
+    /// Commands run one at a time, in arrival order, so a camera switch finishes before the next command.
+    private var queue: Task<Void, Never>?
+
     func handle(_ urls: [URL]) {
         for url in urls {
             guard let parsed = URLCommand.parse(url) else {
                 Self.log.error("Ignoring unrecognized URL: \(url.absoluteString, privacy: .public)")
                 continue
             }
-            Task { await run(parsed.command, camera: parsed.camera) }
+            let previous = queue
+            queue = Task { await previous?.value; await run(parsed.command, camera: parsed.camera) }
         }
     }
 
@@ -35,6 +39,9 @@ final class URLCommandHandler {
             guard await waitForCamera(cam) else { return fail(cam, "No camera available") }
             cam.resetView()
             cam.showToast("View reset")
+        case .resetImage:
+            guard await waitForCamera(cam) else { return fail(cam, "No camera available") }
+            cam.resetImage()
         case .reset:
             guard await waitForCamera(cam) else { return fail(cam, "No camera available") }
             cam.restoreDefaults()

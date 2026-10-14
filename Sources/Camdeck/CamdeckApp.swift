@@ -51,6 +51,9 @@ struct CamdeckApp: App {
                 Divider()
                 @Bindable var zebra = cam.zebra
                 Toggle("Show Clipping", isOn: $zebra.isEnabled)
+                Button("Reset Image & Color") { cam.resetImage() }
+                    .keyboardShortcut("r", modifiers: [.command, .option])
+                    .disabled(cam.currentDevice == nil)
                 Button("Reset All Settings…") { cam.confirmingReset = true }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                     .disabled(cam.currentDevice == nil)

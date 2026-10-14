@@ -14,6 +14,7 @@ final class URLCommandTests: XCTestCase {
 
     func testSimpleCommands() {
         XCTAssertEqual(parse("camdeck://reset-view")?.command, .resetView)
+        XCTAssertEqual(parse("camdeck://reset-image")?.command, .resetImage)
         XCTAssertEqual(parse("camdeck://reset")?.command, .reset)
         XCTAssertEqual(parse("camdeck://lock/on")?.command, .lock(true))
         XCTAssertEqual(parse("camdeck://lock/OFF")?.command, .lock(false))

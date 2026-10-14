@@ -43,6 +43,8 @@ struct InspectorView: View {
                 fold("Image", $imageOpen) {
                     imageRows(Self.basicImage)
                     vendorRows(vendorControls(in: "Image"))
+                    Button("Reset Image & Color") { cam.resetImage() }
+                        .help("Brightness, contrast, color, white balance and exposure go back to the camera's defaults. Zoom, framing and format stay.")
                 }
             }
             if hasAny(Self.exposureIDs) {

@@ -53,8 +53,8 @@ final class CameraController {
     /// > 0 while the lock re-asserts its snapshot: those writes are not user edits.
     @ObservationIgnored private var quietWrites = 0
     @ObservationIgnored private var activationObserver: NSObjectProtocol?
-    /// Watches whether another app uses the selected camera; replaced on every attach.
-    @ObservationIgnored private var usage: (monitor: CameraUsageMonitor, stopObserver: NSObjectProtocol)?
+    /// KVO on `isInUseByAnotherApplication` of the attached camera; replaced on every attach.
+    @ObservationIgnored private var usage: NSKeyValueObservation?
     /// Observed: zoomFactorRange, zoomFactor and the auto framing UI depend on it.
     private var camera: CameraDevice?
     @ObservationIgnored private var pendingReframe: CGPoint?
@@ -103,6 +103,8 @@ final class CameraController {
     }
 
     /// Replaces the preset store and lock for the camera that just attached.
+    private func stopUsageMonitor() { usage?.invalidate(); usage = nil }
+
     private func attachPresetsAndLock(_ id: String) {
         let store = PresetStore(uniqueID: id, controller: self)
         let lock = SettingsLock(
@@ -115,19 +117,13 @@ final class CameraController {
         store.onApplied = { [weak lock] in lock?.userDidChange() }
         presets = store
         settingsLock = lock
-        usage?.monitor.stop()
-        usage.map { NotificationCenter.default.removeObserver($0.stopObserver) }
-        usage = nil
-        let monitor = CameraUsageMonitor(uniqueID: id)
-        // Flag false -> true while our own session is idle: another app opened the camera.
-        monitor.onChange = { [weak self, weak lock] running in
-            if running, self?.session.isRunning == false { lock?.cameraStartedElsewhere() }
+        stopUsageMonitor()
+        // Another app (Zoom, Teams) started using the camera. Documented KVO-observable and excludes Camdeck's own
+        // session, so this fires whether or not our preview is running. No polling.
+        usage = currentDevice?.observe(\.isInUseByAnotherApplication, options: [.old, .new]) { [weak lock] _, change in
+            guard change.newValue == true, change.oldValue != true else { return }
+            Task { @MainActor in lock?.cameraStartedElsewhere() }
         }
-        // Our session stopped but the flag stays true: another app still holds the camera.
-        let stopObserver = NotificationCenter.default.addObserver(forName: AVCaptureSession.didStopRunningNotification, object: session, queue: .main) { [weak monitor, weak lock] _ in
-            MainActor.assumeIsolated { if monitor?.isRunningSomewhere == true { lock?.cameraStartedElsewhere() } }
-        }
-        usage = (monitor, stopObserver)
         if lock.isEnabled { lock.attached() } else { store.applyStartup() }
     }
 
@@ -161,6 +157,13 @@ final class CameraController {
         for id in ["exposure", "wb-temp", "focus"] { reset(id) }
         applyNaturalDefaults()
         showToast("Settings reset")
+    }
+
+    /// "Reset Image & Color": image, color and exposure back to defaults. Format, framing and presets are kept.
+    func resetImage() {
+        for id in ["exposure", "wb-temp", "focus"] { reset(id) }
+        applyNaturalDefaults(includeFormat: false)
+        showToast("Image reset")
     }
 
     /// Moves the view; writes are coalesced and throttled to <= 10 Hz. Counts as manual input.
@@ -415,7 +418,7 @@ final class CameraController {
     }
 
     private func attachUVC() {
-        uvc = nil; camera = nil; reframe = nil; deviceInfo = nil; usbWarning = nil; capabilityProviders = [:]; pendingReframe = nil
+        uvc = nil; camera = nil; reframe = nil; deviceInfo = nil; usbWarning = nil; presets = nil; settingsLock = nil; stopUsageMonitor(); capabilityProviders = [:]; pendingReframe = nil
         states = []; values = [:]; vendorValues = [:]; profileControls = []; profile = .generic
         pendingVendor = [:]; rereads.values.forEach { $0.cancel() }; rereads = [:]
         guard let id = selectedID, let (v, p) = Self.usbIDs(id) else { return }
@@ -624,8 +627,8 @@ final class CameraController {
 
     /// "Restore defaults": natural format plus image controls. Profile `naturalDefaults` win over
     /// GET_DEF. Zoom/pan/tilt are left as they are. Writes ride the coalesced write path.
-    func applyNaturalDefaults() {
-        if let f = Self.naturalFormat(formats, minFPS: 30) { selectFormat(f.id) }
+    func applyNaturalDefaults(includeFormat: Bool = true) {
+        if includeFormat, let f = Self.naturalFormat(formats, minFPS: 30) { selectFormat(f.id) }
         let nd = profile.naturalDefaults
         let std = nd?.standard ?? [:]
         for st in states where st.canSet {

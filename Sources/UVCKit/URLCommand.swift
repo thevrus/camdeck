@@ -6,6 +6,7 @@ public enum URLCommand: Equatable, Sendable {
     case preset(String)
     case resetView
     case reset
+    case resetImage
     case lock(Bool)
     /// Camera by localized name or unique ID.
     case camera(String)
@@ -26,6 +27,7 @@ public enum URLCommand: Equatable, Sendable {
         case ("preset", 1) where !blank(args[0]): command = .preset(args[0])
         case ("reset-view", 0): command = .resetView
         case ("reset", 0): command = .reset
+        case ("reset-image", 0): command = .resetImage
         case ("lock", 1) where args[0].lowercased() == "on": command = .lock(true)
         case ("lock", 1) where args[0].lowercased() == "off": command = .lock(false)
         case ("camera", 1) where !blank(args[0]): command = .camera(args[0])

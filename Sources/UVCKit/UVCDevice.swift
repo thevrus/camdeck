@@ -136,7 +136,7 @@ public final class UVCDevice: @unchecked Sendable {
         self.transport = UVCTransport(channel: channel, topology: topology, scheduler: scheduler)
     }
 
-    /// bcdUSB and link speed (IOKit USBSpeed enum) from the registry; nil if the device is gone.
+    /// bcdUSB and link speed (USBDeviceSpeed numbering) from the registry; nil if the device is gone.
     /// Looked up by vendor/product ID, so two identical cameras read the first match.
     public var usbLink: (bcdUSB: Int, speed: Int)? {
         for s in UVCDevice.services() {

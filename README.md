@@ -32,6 +32,7 @@ Camdeck answers to `camdeck://` links, so Shortcuts ("Open URL"), Raycast and th
 
 - `camdeck://preset/Meeting`: apply a preset by name, or by number (`camdeck://preset/2`)
 - `camdeck://reset-view`: center the view and zoom out
+- `camdeck://reset-image`: put brightness, color and exposure back to defaults (zoom and framing stay)
 - `camdeck://reset`: reset all settings (presets are kept)
 - `camdeck://lock/on` and `camdeck://lock/off`: turn "Keep These Settings" on or off
 - `camdeck://camera/Name`: switch to a camera by name or ID
