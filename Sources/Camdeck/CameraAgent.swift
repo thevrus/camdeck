@@ -9,6 +9,8 @@ import UVCKit
 enum CameraAgent {
     /// Nil when the on-device model can be used; otherwise a short reason for the UI.
     static var unavailableReason: String? { LookAssistant.unavailableReason }
+    /// Toast and return value of `run` when neither the model nor the parser found anything to do.
+    static let nothingDone = "Couldn't tell what to do"
 
     // MARK: Execute
 
@@ -158,7 +160,7 @@ enum CameraAgent {
         done.removeAll(where: \.isEmpty)
         let msg: String
         if done.isEmpty {
-            msg = "Couldn't tell what to do"
+            msg = nothingDone
         } else {
             cam.lookUndo = beforeSettings
             cam.undoExtras = before
