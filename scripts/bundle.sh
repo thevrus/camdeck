@@ -3,8 +3,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 VERSION="${VERSION:-0.1.0}"
 BUILD="${BUILD:-1}"
-swift build -c release
-BIN="$(swift build -c release --show-bin-path)/Camdeck"
+# swiftbuild is the default from Swift 6.4; Xcode 26 needs it asked for. The App Intents step below
+# reads its Intermediates.noindex layout, which the older native build system does not write.
+swift build -c release --build-system swiftbuild
+BIN="$(swift build -c release --build-system swiftbuild --show-bin-path)/Camdeck"
 APP=build/Camdeck.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
