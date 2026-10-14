@@ -20,6 +20,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Build with the Xcode the app is developed on. The runner defaults to Xcode 26, whose SwiftPM
+      # does not write the build layout scripts/bundle.sh reads to generate the Shortcuts metadata.
+      - name: Select Xcode 27
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$XCODE" ]; then
+            echo "::error::No Xcode 27 on this runner. Installed: $(ls -d /Applications/Xcode*.app | xargs -n1 basename | tr '\n' ' ')"
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
       - name: Test
         run: swift test
 
