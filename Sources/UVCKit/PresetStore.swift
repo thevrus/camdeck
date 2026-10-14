@@ -20,6 +20,9 @@ public final class PresetStore {
     /// Applied automatically when this camera attaches or re-attaches (call `applyStartup()`).
     public var startupPresetID: UUID? { didSet { if oldValue != startupPresetID { persist() } } }
 
+    /// Bundle ID -> preset id. When a bound app is running as another app starts using the camera, its preset applies.
+    public private(set) var appBindings: [String: UUID] = [:]
+
     @ObservationIgnored public var capture: () -> CameraSettings
     @ObservationIgnored public var applySettings: (CameraSettings) -> Void
     /// Called after a preset was applied (hook for SettingsLock.userDidChange).
@@ -39,7 +42,20 @@ public final class PresetStore {
         load()
     }
 
-    private struct Disk: Codable { var items: [Preset]; var startupPresetID: UUID? }
+    private struct Disk: Codable {
+        var items: [Preset]
+        var startupPresetID: UUID?
+        var appBindings: [String: UUID]
+        init(items: [Preset], startupPresetID: UUID?, appBindings: [String: UUID]) {
+            self.items = items; self.startupPresetID = startupPresetID; self.appBindings = appBindings
+        }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            items = try c.decode([Preset].self, forKey: .items)
+            startupPresetID = try c.decodeIfPresent(UUID.self, forKey: .startupPresetID)
+            appBindings = try c.decodeIfPresent([String: UUID].self, forKey: .appBindings) ?? [:]
+        }
+    }
 
     private func load() {
         guard let data = try? Data(contentsOf: fileURL) else { return }
@@ -47,11 +63,12 @@ public final class PresetStore {
         guard let d = try? dec.decode(Disk.self, from: data) else { return }
         items = d.items
         startupPresetID = d.startupPresetID
+        appBindings = d.appBindings.filter { b in d.items.contains { $0.id == b.value } }
     }
 
     private func persist() {
         let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601; enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? enc.encode(Disk(items: items, startupPresetID: startupPresetID)) else { return }
+        guard let data = try? enc.encode(Disk(items: items, startupPresetID: startupPresetID, appBindings: appBindings)) else { return }
         try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: fileURL, options: .atomic)
     }
@@ -86,7 +103,36 @@ public final class PresetStore {
     public func delete(_ id: UUID) {
         items.removeAll { $0.id == id }
         if startupPresetID == id { startupPresetID = nil }
+        appBindings = appBindings.filter { $0.value != id }
         persist()
+    }
+
+    /// Binds an app to a preset (an app has at most one preset).
+    public func bind(app bundleID: String, to id: UUID) {
+        guard items.contains(where: { $0.id == id }) else { return }
+        appBindings[bundleID] = id
+        persist()
+    }
+
+    public func unbind(app bundleID: String) {
+        guard appBindings.removeValue(forKey: bundleID) != nil else { return }
+        persist()
+    }
+
+    public func boundApps(for id: UUID) -> [String] {
+        appBindings.filter { $0.value == id }.map(\.key).sorted()
+    }
+
+    /// The preset to use when another app starts the camera. macOS does not say which app, so:
+    /// exactly one bound app running -> its preset; several -> the frontmost if bound, else nil.
+    public func preset(forRunning bundleIDs: [String], frontmost: String?) -> Preset? {
+        let bound = Set(bundleIDs).filter { appBindings[$0] != nil }
+        let pick: String?
+        if bound.count == 1 { pick = bound.first }
+        else if let f = frontmost, bound.contains(f) { pick = f }
+        else { pick = nil }
+        guard let pick, let id = appBindings[pick] else { return nil }
+        return items.first { $0.id == id }
     }
 
     /// Blank names are ignored.

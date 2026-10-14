@@ -120,9 +120,27 @@ final class CameraController {
         stopUsageMonitor()
         // Another app (Zoom, Teams) started using the camera. Documented KVO-observable and excludes Camdeck's own
         // session, so this fires whether or not our preview is running. No polling.
-        usage = currentDevice?.observe(\.isInUseByAnotherApplication, options: [.old, .new]) { [weak lock] _, change in
+        usage = currentDevice?.observe(\.isInUseByAnotherApplication, options: [.old, .new]) { [weak self, weak lock, weak store] _, change in
             guard change.newValue == true, change.oldValue != true else { return }
-            Task { @MainActor in lock?.cameraStartedElsewhere() }
+            Task { @MainActor in
+                guard let lock else { return }
+                guard let store, !store.appBindings.isEmpty else { lock.cameraStartedElsewhere(); return }
+                // macOS does not say which app opened the camera: infer from running bound apps.
+                let running = NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)
+                let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                guard let preset = store.preset(forRunning: running, frontmost: front) else {
+                    if running.contains(where: { store.appBindings[$0] != nil }) {
+                        NSLog("Camdeck: several bound apps running, none frontmost; no app preset applied")
+                    }
+                    lock.cameraStartedElsewhere(); return
+                }
+                // Zoom/Teams write their own values right after opening; apply after they settle.
+                try? await Task.sleep(for: .seconds(2))
+                // The camera may have been switched meanwhile.
+                guard self?.presets === store else { return }
+                store.apply(preset.id)   // onApplied -> lock.userDidChange() recaptures the snapshot
+                lock.cameraStartedElsewhere()
+            }
         }
         if lock.isEnabled { lock.attached() } else { store.applyStartup() }
     }

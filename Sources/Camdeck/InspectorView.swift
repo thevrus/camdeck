@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UVCKit
 
@@ -204,6 +205,8 @@ struct InspectorView: View {
                 Button { presets.apply(p.id) } label: {
                     LabeledContent {
                         HStack(spacing: 8) {
+                            let apps = presets.boundApps(for: p.id).map(Self.appName)
+                            if !apps.isEmpty { Text(apps.joined(separator: ", ")).foregroundStyle(.secondary).lineLimit(1) }
                             if presets.startupPresetID == p.id { Text("At launch").foregroundStyle(.secondary) }
                             if i < 5 { Text("⌘\(i + 1)").foregroundStyle(.tertiary).monospacedDigit() }
                         }
@@ -216,6 +219,16 @@ struct InspectorView: View {
                     Button("Apply") { presets.apply(p.id) }
                     Toggle("Apply at Launch", isOn: Binding(get: { presets.startupPresetID == p.id },
                                                             set: { presets.startupPresetID = $0 ? p.id : nil }))
+                    Divider()
+                    Button("Use With App…") { pickApp(for: p.id, in: presets) }
+                    let bound = presets.boundApps(for: p.id)
+                    if !bound.isEmpty {
+                        Menu("Remove App Binding") {
+                            ForEach(bound, id: \.self) { id in
+                                Button(Self.appName(id)) { presets.unbind(app: id) }
+                            }
+                        }
+                    }
                     Divider()
                     Button("Rename…") { renameText = p.name; renaming = p }
                     Button("Delete", role: .destructive) { presets.delete(p.id) }
@@ -245,6 +258,21 @@ struct InspectorView: View {
             Button("Rename") { if let p = renaming { presets.rename(p.id, to: renameText) } }
             Button("Cancel", role: .cancel) {}
         }
+    }
+
+    private static func appName(_ bundleID: String) -> String {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+            .map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } ?? bundleID
+    }
+
+    private func pickApp(for id: UUID, in presets: PresetStore) {
+        let panel = NSOpenPanel()
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose the app that should use this preset when it starts the camera."
+        guard panel.runModal() == .OK, let url = panel.url, let bundleID = Bundle(url: url)?.bundleIdentifier else { return }
+        presets.bind(app: bundleID, to: id)
     }
 
     // MARK: Device
