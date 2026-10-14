@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Live preview via AVCaptureSession. Hardened runtime blocks camera access without it. -->
+    <key>com.apple.security.device.camera</key>
+    <true/>
+    <!-- Camdeck sends UVC control requests over IOKit USB. The app is not sandboxed; this is
+         listed under hardened-runtime resource access and is harmless where not enforced. -->
+    <key>com.apple.security.device.usb</key>
+    <true/>
+</dict>
+</plist>
