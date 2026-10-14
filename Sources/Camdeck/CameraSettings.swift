@@ -25,49 +25,38 @@ extension CameraController {
 // MARK: Describe a look
 
 extension CameraController {
-    /// Applies a plain-language request ("warmer", "black and white"). On-device model first, keyword fallback second.
-    /// Returns the toast text. The previous image settings are kept for `undoLook()`.
+    /// Applies a resolved look plan. While an auto is on, the cached manual value is stale, so those controls are
+    /// read from the camera first. Returns a short description of what changed, or why nothing did.
     @discardableResult
-    func applyLook(_ request: String) async -> String {
-        let text = request.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return "" }
+    func applyLook(_ adj: LookAdjustment) async -> String {
         let id = selectedID
-        // While an auto is on, the cached manual value is stale: start moves from what the camera is doing now.
         var current = values
         var live: [String] = []
         if (value("wb-auto").first ?? 0) != 0 { live.append("wb-temp") }
         if autoExposureOn() { live += ["exposure", "gain"] }
         if !live.isEmpty { current.merge(await readStandard(live)) { _, fresh in fresh } }
-        // The model's plan, if it yields any write on this camera; otherwise the keyword parser's.
-        var adj = LookAdjustment(), writes: [String: [Int]] = [:]
-        if LookAssistant.unavailableReason == nil, let a = try? await LookAssistant.plan(text, states: states, current: current) {
-            adj = a; writes = a.resolve(states: states, current: current)
-        }
         guard selectedID == id else { return "" }
-        if writes.isEmpty, let a = LookAdjustment.parse(text) {
-            adj = a; writes = a.resolve(states: states, current: current)
-        }
-        guard !writes.isEmpty else {
-            let msg = adj.isEmpty ? "Couldn't tell what to change" : "This camera can't do that"
-            showToast(msg); return msg
-        }
-        // Undo covers only what this request touched.
-        lookUndo = CameraSettings(controls: values.filter { writes[$0.key] != nil })
+        let writes = adj.resolve(states: states, current: current)
+        guard !writes.isEmpty else { return adj.isEmpty ? "Nothing to change" : "This camera can't do that" }
         for (k, v) in writes { set(k, v) }   // flush() orders autos before manual values
-        // Describe only what produced a write on this camera.
-        let done = LookAdjustment(moves: adj.moves.filter { writes[$0.key] != nil }, levels: adj.levels.filter { writes[$0.key] != nil },
-                                  autos: adj.autos.filter { writes[$0.key] != nil })
-        let summary = done.isEmpty ? adj.summary() : done.summary()
-        let msg = summary.prefix(1).uppercased() + summary.dropFirst()
-        showToast(msg)
-        return msg
+        func wrote<V>(_ d: [String: V]) -> [String: V] { d.filter { writes[$0.key] != nil } }
+        let summary = LookAdjustment(moves: wrote(adj.moves), levels: wrote(adj.levels), autos: wrote(adj.autos)).summary()
+        return summary.prefix(1).uppercased() + summary.dropFirst()
     }
 
-    /// Puts the image back as it was before the last `applyLook`.
+    /// Puts everything back as it was before the last request.
     func undoLook() {
         guard let s = lookUndo else { return }
         lookUndo = nil
-        apply(s)
+        if let x = undoExtras {
+            undoExtras = nil
+            autoFraming = x.framing   // first: a running framer would fight the view restore
+            mirrored = x.mirrored
+            apply(s)
+            if let c = x.center, reframe != nil { setReframe(center: c) }
+        } else {
+            apply(s)
+        }
         showToast("Undone")
     }
 }

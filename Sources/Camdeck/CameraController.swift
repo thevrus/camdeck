@@ -4,6 +4,9 @@ import Observation
 import UVCKit
 import os
 
+/// Everything an assistant request can change that CameraSettings does not hold.
+struct UndoExtras { var framing: AutoFramingMode; var mirrored: Bool; var center: CGPoint? }
+
 /// Reframe state of the current camera. `center` is in -1...1 of the travel available at the current zoom
 /// (x + = view right, y + = view down). `travel` is that travel as a fraction of the 1x frame.
 struct ReframeState: Equatable {
@@ -95,10 +98,15 @@ final class CameraController {
     private(set) var autoReadout: String?
     @ObservationIgnored private var readoutTask: Task<Void, Never>?
     private static let exposureEditIDs: Set<String> = ["ae-mode", "exposure", "gain", "backlight", "lowlight", "powerline"]
+    /// Set by the inspector while the readout is on screen. No USB reads for it otherwise.
+    var autoReadoutVisible = false {
+        didSet { if autoReadoutVisible && !oldValue { Task { await refreshAutoReadout() } } }
+    }
 
     /// Debounced (~0.5 s) one-shot refresh after an exposure-related edit. Never repeats on its own.
     private func scheduleAutoReadout() {
         readoutTask?.cancel()
+        guard autoReadoutVisible else { return }
         readoutTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
@@ -107,7 +115,8 @@ final class CameraController {
     }
 
     /// Reads the auto shutter and gain once. Standard exposure/gain first; Insta360-style profile shutter/iso otherwise.
-    func refreshAutoReadout() async {
+    private func refreshAutoReadout() async {
+        guard autoReadoutVisible else { return }
         guard let id = selectedID else { autoReadout = nil; return }
         var text: String?
         if state("exposure") != nil || state("gain") != nil {
@@ -174,9 +183,7 @@ final class CameraController {
                 guard let lock else { return }
                 guard let store, !store.appBindings.isEmpty else { lock.cameraStartedElsewhere(); return }
                 // macOS does not say which app opened the camera: use the frontmost one if it is bound.
-                let running = NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)
-                let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-                guard let preset = store.preset(forRunning: running, frontmost: front) else {
+                guard let preset = store.preset(frontmost: NSWorkspace.shared.frontmostApplication?.bundleIdentifier) else {
                     lock.cameraStartedElsewhere(); return
                 }
                 // Zoom/Teams write their own values right after opening; apply after they settle.
@@ -213,8 +220,12 @@ final class CameraController {
     /// Set by the menu and inspector; ContentView shows the confirmation.
     var confirmingReset = false
 
-    /// Image settings before the last "Describe a look" request; nil when there is nothing to undo.
+    /// Settings before the last assistant request; nil when there is nothing to undo.
     var lookUndo: CameraSettings?
+    @ObservationIgnored var undoExtras: UndoExtras?
+
+    /// Set by the toolbar button and the menu; ContentView floats the look field over the preview.
+    var lookOpen = false
 
     /// Public "Reset all settings": natural format, image and exposure controls, framing and auto framing. Presets are kept.
     func restoreDefaults() {
@@ -490,7 +501,7 @@ final class CameraController {
     private func attachUVC() {
         uvc = nil; camera = nil; reframe = nil; deviceInfo = nil; usbWarning = nil; presets = nil; settingsLock = nil; stopUsageMonitor(); capabilityProviders = [:]; pendingReframe = nil
         states = []; values = [:]; vendorValues = [:]; profileControls = []; profile = .generic
-        autoReadout = nil; readoutTask?.cancel(); lookUndo = nil
+        autoReadout = nil; readoutTask?.cancel(); lookUndo = nil; undoExtras = nil
         pendingVendor = [:]; rereads.values.forEach { $0.cancel() }; rereads = [:]
         guard let id = selectedID, let (v, p) = Self.usbIDs(id) else { return }
         io.async { [weak self] in
@@ -507,10 +518,11 @@ final class CameraController {
             let zRaw = s.first { $0.id == "zoom" }?.cur?.first
             let zf = cam?.zoom.map { z in z.factor(fromRaw: zRaw ?? z.rawRange.lowerBound) } ?? 1
             let center = cam?.reframe.flatMap { try? $0.read(zoomFactor: zf) }
+            let usbWarning = dev?.usbWarning
             Task { @MainActor in
                 guard let self, self.selectedID == id else { return }
                 self.uvc = dev
-                self.usbWarning = dev?.usbWarning
+                self.usbWarning = usbWarning
                 self.camera = cam
                 self.deviceInfo = info
                 self.capabilityProviders = Dictionary(uniqueKeysWithValues: (cam?.plan.providers ?? [:]).map { ($0.key.rawValue, $0.value) })
@@ -644,6 +656,7 @@ final class CameraController {
         return values[id] ?? state(id)?.def ?? [0]
     }
     func reset(_ id: String) { if let d = state(id)?.def { set(id, d) } }
+    var hasViewControls: Bool { ["zoom", "pantilt", "roll"].contains { state($0) != nil } }
     func resetView() {
         for id in ["zoom", "pantilt", "roll"] { reset(id) }
         if reframe != nil { setReframe(center: .zero) }
