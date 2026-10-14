@@ -16,6 +16,8 @@ final class URLCommandTests: XCTestCase {
         XCTAssertEqual(parse("camdeck://reset-view")?.command, .resetView)
         XCTAssertEqual(parse("camdeck://reset-image")?.command, .resetImage)
         XCTAssertEqual(parse("camdeck://reset")?.command, .reset)
+        XCTAssertEqual(parse("camdeck://fix")?.command, .fix)
+        XCTAssertEqual(parse("camdeck://FIX?camera=Brio")?.camera, "Brio")
         XCTAssertEqual(parse("camdeck://lock/on")?.command, .lock(true))
         XCTAssertEqual(parse("camdeck://lock/OFF")?.command, .lock(false))
         XCTAssertEqual(parse("camdeck://camera/Insta360%20Link%202C")?.command, .camera("Insta360 Link 2C"))
@@ -30,7 +32,7 @@ final class URLCommandTests: XCTestCase {
 
     func testUnknownInputIsNil() {
         for s in ["https://preset/Meeting", "camdeck://", "camdeck://nope", "camdeck://preset", "camdeck://preset/",
-                  "camdeck://lock", "camdeck://lock/maybe", "camdeck://reset/now", "camdeck://camera"] {
+                  "camdeck://lock", "camdeck://lock/maybe", "camdeck://reset/now", "camdeck://fix/now", "camdeck://camera"] {
             XCTAssertNil(parse(s), s)
         }
     }

@@ -51,6 +51,9 @@ struct CamdeckApp: App {
                 Divider()
                 @Bindable var zebra = cam.zebra
                 Toggle("Show Clipping", isOn: $zebra.isEnabled)
+                Button("Fix My Picture") { Task { await cam.fixPicture() } }
+                    .keyboardShortcut("f", modifiers: [.command, .option])
+                    .disabled(cam.fixing || !cam.hasUVC)
                 Button("Reset Image & Color") { cam.resetImage() }
                     .keyboardShortcut("r", modifiers: [.command, .option])
                     .disabled(cam.currentDevice == nil)

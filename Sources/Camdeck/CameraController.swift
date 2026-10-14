@@ -89,7 +89,55 @@ final class CameraController {
 
     private var controlsByID: [String: UVCControl] { Dictionary(uniqueKeysWithValues: states.map { ($0.id, $0.control) }) }
 
-    private func readStandard(_ ids: [String]) async -> [String: [Int]] {
+    // MARK: Auto-exposure readout
+
+    /// "Auto: 1/60 s · gain 32" while auto exposure is on and the camera reports it; nil otherwise.
+    private(set) var autoReadout: String?
+    @ObservationIgnored private var readoutTask: Task<Void, Never>?
+    private static let exposureEditIDs: Set<String> = ["ae-mode", "exposure", "gain", "backlight", "lowlight", "powerline"]
+
+    /// Debounced (~0.5 s) one-shot refresh after an exposure-related edit. Never repeats on its own.
+    private func scheduleAutoReadout() {
+        readoutTask?.cancel()
+        readoutTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            await self?.refreshAutoReadout()
+        }
+    }
+
+    /// Reads the auto shutter and gain once. Standard exposure/gain first; Insta360-style profile shutter/iso otherwise.
+    func refreshAutoReadout() async {
+        guard let id = selectedID else { autoReadout = nil; return }
+        var text: String?
+        if state("exposure") != nil || state("gain") != nil {
+            let r = await readStandard(["ae-mode", "exposure", "gain"])
+            if let mode = r["ae-mode"]?.first, UVCControl.isAutoExposure(mode) {
+                text = ExposureFormat.readout(
+                    shutter: r["exposure"]?.first.flatMap { ExposureFormat.shutter(exposure100us: $0) },
+                    gainLabel: r["gain"]?.first.map { "gain \($0)" })
+            }
+        } else if let pc = camera?.profileControls,
+                  let ae = pc.controls.first(where: { $0.id == "aeMode" }) {
+            let sh = pc.controls.first { $0.id == "shutter" }, iso = pc.controls.first { $0.id == "iso" }
+            let r: [String: Int] = await withCheckedContinuation { k in
+                io.async {
+                    var out: [String: Int] = [:]
+                    for c in [ae, sh, iso].compactMap({ $0 }) { if let v = try? pc.read(c) { out[c.id] = v } }
+                    k.resume(returning: out)
+                }
+            }
+            if r["aeMode"] == 2 {
+                text = ExposureFormat.readout(
+                    shutter: r["shutter"].flatMap { ExposureFormat.shutter(denominator: $0) },
+                    gainLabel: r["iso"].map { "ISO \($0)" })
+            }
+        }
+        guard selectedID == id else { return }
+        autoReadout = text
+    }
+
+    func readStandard(_ ids: [String]) async -> [String: [Int]] {
         guard let dev = uvc else { return [:] }
         let controls = controlsByID
         let wanted = ids.compactMap { id in controls[id].map { (id, $0) } }
@@ -257,7 +305,9 @@ final class CameraController {
     /// True while the main window shows the preview. The capture session runs only while it is visible or auto
     /// framing needs frames, so a closed window leaves the camera off and other apps' camera use is detectable.
     var previewVisible = false { didSet { if oldValue != previewVisible { updateSessionRunning() } } }
-    private var wantsSession: Bool { previewVisible || autoFraming != .off }
+    /// True while "Fix My Picture" runs (PictureFixer.swift); keeps the session up for its few seconds.
+    var fixing = false { didSet { if oldValue != fixing { updateSessionRunning() } } }
+    private var wantsSession: Bool { previewVisible || autoFraming != .off || fixing }
 
     private func updateSessionRunning() {
         let session = self.session, run = wantsSession && currentDevice != nil
@@ -290,7 +340,7 @@ final class CameraController {
     private(set) var isSubjectDetected = false
     /// Subject box, normalized, top-left origin, in preview coordinates (mirrored when `mirrored`).
     private(set) var subjectBox: CGRect?
-    @ObservationIgnored private let framer = AutoFramer()
+    @ObservationIgnored let framer = AutoFramer()
     @ObservationIgnored private var framerAttached = false
     @ObservationIgnored private var lastAutoWrite = Date.distantPast
 
@@ -298,7 +348,7 @@ final class CameraController {
     @ObservationIgnored private var uvc: UVCDevice?
     @ObservationIgnored private var monitor: UVCHotplugMonitor?
     @ObservationIgnored private let io = DispatchQueue(label: "app.camdeck.uvc")
-    @ObservationIgnored private let sessionQueue = DispatchQueue(label: "app.camdeck.session")
+    @ObservationIgnored let sessionQueue = DispatchQueue(label: "app.camdeck.session")
     @ObservationIgnored private var pending: [String: [Int]] = [:]
     @ObservationIgnored private var pendingVendor: [String: Int] = [:]
     @ObservationIgnored private var rereads: [String: Task<Void, Never>] = [:]
@@ -318,7 +368,11 @@ final class CameraController {
             }
         }
         activationObserver = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.syncCenterStage(); await self?.settingsLock?.appDidBecomeActive() }
+            Task { @MainActor in
+                self?.syncCenterStage()
+                await self?.settingsLock?.appDidBecomeActive()
+                await self?.refreshAutoReadout()
+            }
         }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized: authorized = true; refresh()
@@ -438,6 +492,7 @@ final class CameraController {
     private func attachUVC() {
         uvc = nil; camera = nil; reframe = nil; deviceInfo = nil; usbWarning = nil; presets = nil; settingsLock = nil; stopUsageMonitor(); capabilityProviders = [:]; pendingReframe = nil
         states = []; values = [:]; vendorValues = [:]; profileControls = []; profile = .generic
+        autoReadout = nil; readoutTask?.cancel()
         pendingVendor = [:]; rereads.values.forEach { $0.cancel() }; rereads = [:]
         guard let id = selectedID, let (v, p) = Self.usbIDs(id) else { return }
         io.async { [weak self] in
@@ -471,6 +526,7 @@ final class CameraController {
                 self.syncFramer()
                 self.applyNaturalDefaultsOnFirstAttach(id)
                 self.attachPresetsAndLock(id)
+                self.scheduleAutoReadout()
             }
         }
     }
@@ -501,6 +557,7 @@ final class CameraController {
         pending[id] = value
         scheduleFlush()
         userEdited()
+        if Self.exposureEditIDs.contains(id) { scheduleAutoReadout() }
         if id == "zoom" { refreshReframeTravel() }
         if ["zoom", "pantilt", "roll"].contains(id) { framer.noteManualInput(); syncFramer() }
     }
@@ -607,6 +664,7 @@ final class CameraController {
         pendingVendor[c.id] = v
         scheduleFlush()
         userEdited()
+        scheduleAutoReadout()
     }
 
     /// False while the control's `enabledWhen` is unmet or its value could not be read.

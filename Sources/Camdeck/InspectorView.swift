@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 import UVCKit
 
 struct InspectorView: View {
@@ -48,7 +49,18 @@ struct InspectorView: View {
             }
             if hasAny(Self.exposureIDs) {
                 fold("Color & Exposure", $exposureOpen, reset: { cam.resetImage() }) {
+                    Button { Task { await cam.fixPicture() } } label: {
+                        Label(cam.fixing ? "Fixing…" : "Fix My Picture", systemImage: "wand.and.stars")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(cam.fixing || !cam.hasUVC)
+                    .help("Sets exposure, white balance, focus and anti-flicker from your face, then stops. Takes a few seconds.")
                     imageRows(Self.exposureIDs)
+                    if let readout = cam.autoReadout {
+                        Text(readout).font(.callout).foregroundStyle(.secondary).monospacedDigit()
+                    }
                     @Bindable var zebra = cam.zebra
                     Toggle("Show Clipping", isOn: $zebra.isEnabled)
                         .help("Stripes over areas that are blown out to pure white, so you can lower exposure until they disappear.")
@@ -68,6 +80,7 @@ struct InspectorView: View {
             if cam.currentDevice != nil { deviceSection }
         }
         .formStyle(.grouped)
+        .onChange(of: exposureOpen) { _, open in if open { Task { await cam.refreshAutoReadout() } } }
         .animation(.snappy, value: cam.value("zoom"))
         .animation(.snappy, value: cam.selectedFormatID)
         // Opaque on purpose: the glass inspector over dark video made text unreadable.
@@ -199,6 +212,29 @@ struct InspectorView: View {
 
     // MARK: Presets
 
+    private func exportPresets(_ presets: PresetStore) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "Camdeck Presets.json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try presets.exportData().write(to: url, options: .atomic)
+            let n = presets.items.count
+            cam.showToast("Exported \(n) preset\(n == 1 ? "" : "s")")
+        } catch { cam.showToast("Export failed") }
+    }
+
+    private func importPresets(_ presets: PresetStore) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let n = try presets.importData(Data(contentsOf: url))
+            cam.showToast("Imported \(n) preset\(n == 1 ? "" : "s")")
+        } catch { cam.showToast("Not a Camdeck presets file") }
+    }
+
     private func presetsSection(_ presets: PresetStore) -> some View {
         fold("Presets", $presetsOpen) {
             ForEach(Array(presets.items.enumerated()), id: \.element.id) { i, p in
@@ -238,6 +274,8 @@ struct InspectorView: View {
                 footnote("Save the current look, then switch back to it any time with ⌘1 to ⌘5.")
             }
             Button("Save Preset…") { newName = presets.defaultName; saving = true }
+            Button("Export Presets…") { exportPresets(presets) }.disabled(presets.items.isEmpty)
+            Button("Import Presets…") { importPresets(presets) }
             if let lock = cam.settingsLock {
                 @Bindable var lock = lock
                 Toggle("Keep These Settings", isOn: $lock.isEnabled)
