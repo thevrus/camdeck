@@ -173,13 +173,10 @@ final class CameraController {
             Task { @MainActor in
                 guard let lock else { return }
                 guard let store, !store.appBindings.isEmpty else { lock.cameraStartedElsewhere(); return }
-                // macOS does not say which app opened the camera: infer from running bound apps.
+                // macOS does not say which app opened the camera: use the frontmost one if it is bound.
                 let running = NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)
                 let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
                 guard let preset = store.preset(forRunning: running, frontmost: front) else {
-                    if running.contains(where: { store.appBindings[$0] != nil }) {
-                        NSLog("Camdeck: several bound apps running, none frontmost; no app preset applied")
-                    }
                     lock.cameraStartedElsewhere(); return
                 }
                 // Zoom/Teams write their own values right after opening; apply after they settle.

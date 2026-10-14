@@ -51,8 +51,10 @@ final class PresetStoreTests: XCTestCase {
         s.bind(app: "us.zoom.xos", to: meet.id)
         s.bind(app: "com.obsproject.obs-studio", to: stream.id)
         XCTAssertNil(s.preset(forRunning: ["com.apple.finder"], frontmost: nil))
-        XCTAssertEqual(s.preset(forRunning: ["com.apple.finder", "us.zoom.xos"], frontmost: "com.apple.finder")?.id, meet.id)
-        XCTAssertEqual(s.preset(forRunning: ["us.zoom.xos", "us.zoom.xos"], frontmost: nil)?.id, meet.id)
+        // Zoom idling in the background while Photo Booth (frontmost, unbound) opens the camera.
+        XCTAssertNil(s.preset(forRunning: ["com.apple.Photo-Booth", "us.zoom.xos"], frontmost: "com.apple.Photo-Booth"))
+        XCTAssertEqual(s.preset(forRunning: ["com.apple.finder", "us.zoom.xos"], frontmost: "us.zoom.xos")?.id, meet.id)
+        XCTAssertNil(s.preset(forRunning: ["us.zoom.xos"], frontmost: nil))
         let both = ["us.zoom.xos", "com.obsproject.obs-studio"]
         XCTAssertEqual(s.preset(forRunning: both, frontmost: "com.obsproject.obs-studio")?.id, stream.id)
         XCTAssertNil(s.preset(forRunning: both, frontmost: "com.apple.finder"))

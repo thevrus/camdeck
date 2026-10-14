@@ -123,15 +123,11 @@ public final class PresetStore {
         appBindings.filter { $0.value == id }.map(\.key).sorted()
     }
 
-    /// The preset to use when another app starts the camera. macOS does not say which app, so:
-    /// exactly one bound app running -> its preset; several -> the frontmost if bound, else nil.
+    /// The preset to use when another app starts the camera. macOS does not say which app, so only the
+    /// frontmost app counts, and only if it is bound: a bound app idling in the background (Zoom left open)
+    /// must not hijack FaceTime or Photo Booth.
     public func preset(forRunning bundleIDs: [String], frontmost: String?) -> Preset? {
-        let bound = Set(bundleIDs).filter { appBindings[$0] != nil }
-        let pick: String?
-        if bound.count == 1 { pick = bound.first }
-        else if let f = frontmost, bound.contains(f) { pick = f }
-        else { pick = nil }
-        guard let pick, let id = appBindings[pick] else { return nil }
+        guard let f = frontmost, bundleIDs.contains(f), let id = appBindings[f] else { return nil }
         return items.first { $0.id == id }
     }
 
