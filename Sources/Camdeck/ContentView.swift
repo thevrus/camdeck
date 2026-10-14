@@ -4,6 +4,7 @@ import UVCKit
 struct ContentView: View {
     @Bindable var cam: CameraController
     @AppStorage("showInspector") private var showInspector = true
+    @AppStorage("showAllControls") private var showAll = false
 
     var body: some View {
         preview
@@ -25,6 +26,17 @@ struct ContentView: View {
                     .labelStyle(.titleAndIcon)
                     .disabled(!hasViewControls)
                     .help("Reset View")
+                }
+                ToolbarSpacer(.fixed, placement: .primaryAction)
+                ToolbarItem(placement: .primaryAction) {
+                    // Same switch as Camera > Show All Controls (⇧⌘A). View-only: nothing is written to the camera.
+                    Picker("Controls", selection: $showAll) {
+                        Text("Basic").tag(false)
+                        Text("Pro").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    .help("Basic shows the everyday controls. Pro shows every setting the camera supports.")
                 }
                 ToolbarSpacer(.fixed, placement: .primaryAction)
                 ToolbarItem(placement: .primaryAction) {
