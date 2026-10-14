@@ -152,4 +152,37 @@ public final class PresetStore {
         items = rest
         persist()
     }
+
+    // MARK: Export / import
+
+    private struct Bundle: Codable { var camdeck: Int; var presets: [Preset] }
+
+    /// Pretty JSON `{ "camdeck": 1, "presets": [...] }`, same preset schema as the on-disk file.
+    public func exportData() throws -> Data {
+        let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601; enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try enc.encode(Bundle(camdeck: 1, presets: items))
+    }
+
+    /// Appends the file's presets with fresh IDs; clashing names become "Name 2", "Name 3"... Returns the count.
+    /// Unknown control ids are kept: they are filtered when a preset is applied.
+    @discardableResult
+    public func importData(_ data: Data) throws -> Int {
+        let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+        let bundle = try dec.decode(Bundle.self, from: data)
+        var names = Set(items.map(\.name))
+        for p in bundle.presets {
+            let name = Self.unique(Self.clean(p.name) ?? defaultName, in: names)
+            names.insert(name)
+            items.append(Preset(name: name, settings: p.settings, createdAt: p.createdAt))
+        }
+        if !bundle.presets.isEmpty { persist() }
+        return bundle.presets.count
+    }
+
+    private static func unique(_ name: String, in taken: Set<String>) -> String {
+        guard taken.contains(name) else { return name }
+        var n = 2
+        while taken.contains("\(name) \(n)") { n += 1 }
+        return "\(name) \(n)"
+    }
 }

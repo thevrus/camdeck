@@ -82,4 +82,33 @@ final class PresetStoreTests: XCTestCase {
         XCTAssertEqual(again.items.map(\.name), ["Old"])
         XCTAssertTrue(again.appBindings.isEmpty)
     }
+
+    func testExportImportRoundTrip() throws {
+        let a = make()
+        a.save(name: "A")
+        current.controls["future-control"] = [9]
+        a.save(name: "B")
+        let data = try a.exportData()
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["camdeck"] as? Int, 1)
+        XCTAssertEqual((json["presets"] as? [Any])?.count, 2)
+
+        let b = PresetStore(uniqueID: "other", directory: dir, capture: { self.current }, apply: { _ in })
+        b.save(name: "A")
+        XCTAssertEqual(try b.importData(data), 2)
+        XCTAssertEqual(b.items.map(\.name), ["A", "A 2", "B"])
+        XCTAssertEqual(Set(b.items.map(\.id)).count, 3)
+        XCTAssertEqual(try b.importData(data), 2)
+        XCTAssertEqual(b.items.map(\.name), ["A", "A 2", "B", "A 3", "B 2"])
+        XCTAssertEqual(b.items[2].settings.controls["future-control"], [9])
+        let reloaded = PresetStore(uniqueID: "other", directory: dir, capture: { self.current }, apply: { _ in })
+        XCTAssertEqual(reloaded.items.count, 5)
+    }
+
+    func testImportRejectsGarbage() {
+        let s = make()
+        XCTAssertThrowsError(try s.importData(Data("nope".utf8)))
+        XCTAssertThrowsError(try s.importData(Data(#"{"presets": []}"#.utf8)))
+        XCTAssertEqual(s.items.count, 0)
+    }
 }
