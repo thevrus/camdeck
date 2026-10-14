@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camdeck - webcam controls for Mac</title>
+<meta name="description" content="Camdeck sets up your webcam and gets out of the way. No virtual camera, no video pipeline, no effects engine. Settings are written to the camera, so every app sees them.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#edf1ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d1210" media="(prefers-color-scheme: dark)">
+<meta property="og:title" content="Camdeck - webcam controls for Mac">
+<meta property="og:description" content="A small, free, open source Mac app for your USB webcam. Settings are written to the camera, so every app sees them.">
+<meta property="og:image" content="https://thevrus.github.io/camdeck/icon.png">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<script>document.documentElement.classList.add("js")</script>
+<style>
+:root {
+  --bg: #edf1ec;
+  --surface: #e1e8e0;
+  --ink: #0f1a13;
+  --ink-2: #44514a;
+  --line: rgba(15, 26, 19, 0.16);
+  --line-strong: rgba(15, 26, 19, 0.34);
+  --btn-bg: #0f1a13;
+  --btn-fg: #edf1ec;
+  --btn-hover: #2b3a31;
+  --dot: #f2c230;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --gutter: clamp(1rem, 4.5vw, 2.5rem);
+  --max: 72rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1210;
+    --surface: #151d18;
+    --ink: #e8efe9;
+    --ink-2: #a2afa6;
+    --line: rgba(232, 239, 233, 0.16);
+    --line-strong: rgba(232, 239, 233, 0.36);
+    --btn-bg: #e8efe9;
+    --btn-fg: #0d1210;
+    --btn-hover: #c5d1c8;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1210;
+  --surface: #151d18;
+  --ink: #e8efe9;
+  --ink-2: #a2afa6;
+  --line: rgba(232, 239, 233, 0.16);
+  --line-strong: rgba(232, 239, 233, 0.36);
+  --btn-bg: #e8efe9;
+  --btn-fg: #0d1210;
+  --btn-hover: #c5d1c8;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 1.0625rem/1.6 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--dot); color: #0f1a13; }
+a { color: inherit; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 0.2em; }
+a:hover { color: var(--ink-2); }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 4px; }
+code, kbd { font-family: var(--mono); font-size: 0.9em; }
+.wrap { max-width: var(--max); margin: 0 auto; padding-inline: var(--gutter); }
+
+/* ---------- hero ---------- */
+.hero {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+.hero > .wrap { width: 100%; }
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.75rem;
+  padding-block: 1.25rem;
+}
+.brand { display: flex; align-items: center; gap: 0.625rem; font-weight: 700; text-decoration: none; margin-right: auto; }
+.brand img { width: 2rem; height: 2rem; display: block; }
+.nav a:not(.brand) { text-decoration: none; color: var(--ink-2); font-size: 0.9375rem; }
+.nav a:not(.brand):hover { color: var(--ink); }
+.hero-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-block: 3rem clamp(2rem, 6vh, 4.5rem);
+}
+.hero-icon { width: clamp(5.5rem, 12vw, 8.5rem); height: auto; display: block; margin-bottom: clamp(1.5rem, 4vh, 2.75rem); margin-left: -0.35rem; }
+h1 {
+  margin: 0;
+  font-size: clamp(2.25rem, 5.4vw, 4.75rem);
+  line-height: 1.04;
+  font-weight: 750;
+  letter-spacing: -0.022em;
+  text-wrap: balance;
+  max-width: 17em;
+}
+h1 span { color: var(--ink-2); }
+.lede { margin: 1.75rem 0 0; max-width: 36rem; font-size: clamp(1.0625rem, 1.6vw, 1.25rem); line-height: 1.55; color: var(--ink-2); text-wrap: pretty; }
+.get { display: flex; flex-wrap: wrap; align-items: stretch; gap: 1rem 2.5rem; margin-top: 2.5rem; }
+.dl { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3.25rem;
+  padding: 0 1.75rem;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border-radius: 0.625rem;
+  font-weight: 700;
+  font-size: 1.0625rem;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+.btn:hover { background: var(--btn-hover); color: var(--btn-fg); }
+.fine { font-size: 0.875rem; color: var(--ink-2); }
+.brew { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; max-width: 100%; }
+.brew-label { font-size: 0.875rem; color: var(--ink-2); }
+.cmd {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.625rem;
+  min-height: 3.25rem;
+}
+.cmd code { padding: 0.8rem 1rem; white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; align-self: center; font-size: 0.9375rem; }
+.copy {
+  display: none;
+  align-items: center;
+  flex: none;
+  padding: 0 1rem;
+  background: none;
+  border: 0;
+  border-left: 1px solid var(--line);
+  color: var(--ink-2);
+  font: 600 0.875rem var(--sans);
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+.js .copy { display: inline-flex; }
+.copy:hover { color: var(--ink); background: var(--surface); }
+
+/* ---------- sections ---------- */
+section { padding-block: clamp(4rem, 10vw, 7.5rem); }
+.split { display: grid; gap: 2rem; }
+@media (min-width: 56rem) {
+  .split { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 3rem; }
+  .split > h2 { position: sticky; top: 2rem; align-self: start; }
+}
+h2 { margin: 0; font-size: clamp(1.75rem, 3.6vw, 2.75rem); line-height: 1.1; font-weight: 720; letter-spacing: -0.015em; text-wrap: balance; }
+h2 span { color: var(--ink-2); }
+.sub { margin: 0 0 2rem; max-width: 38rem; color: var(--ink-2); }
+
+/* demo */
+.island { margin-inline: var(--gutter); }
+.island-in {
+  max-width: calc(var(--max) - 2 * var(--gutter));
+  margin: 0 auto;
+  background: var(--surface);
+  border-radius: 1.5rem;
+  padding: clamp(1.5rem, 5vw, 3.5rem);
+}
+.island h2 { max-width: 20ch; }
+.island .sub { margin-top: 1rem; }
+.demo { display: grid; gap: 0; align-items: center; margin-top: 2.5rem; }
+@media (min-width: 56rem) { .demo { grid-template-columns: 1fr 3.5rem 0.8fr 3.5rem 1fr; } }
+.node { border: 1px solid var(--line-strong); border-radius: 0.875rem; padding: 1.25rem; background: var(--bg); }
+.node h3 { margin: 0 0 0.75rem; font-size: 0.9375rem; font-weight: 700; }
+.node small { display: block; margin-top: 0.75rem; color: var(--ink-2); font-size: 0.875rem; line-height: 1.45; }
+.row { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.row b { font-variant-numeric: tabular-nums; font-weight: 700; }
+.node label { font-size: 0.9375rem; }
+input[type=range] { width: 100%; margin: 0.9rem 0 0; accent-color: var(--ink); height: 1.75rem; cursor: pointer; }
+.wire { justify-self: center; width: 3px; height: 2rem; border-radius: 3px; background: var(--line-strong); }
+@media (min-width: 56rem) { .wire { width: 100%; max-width: 3.5rem; height: 3px; } }
+.apps { display: grid; gap: 0.5rem; }
+.app { display: grid; grid-template-columns: 4.5rem 1fr 2.25rem; align-items: center; gap: 0.75rem; font-size: 0.9375rem; }
+.app b { text-align: right; font-variant-numeric: tabular-nums; }
+.bar { height: 6px; border-radius: 6px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; width: calc(var(--v, 62) * 1%); background: var(--ink); border-radius: 6px; }
+
+/* what it does */
+.feat { margin: 0; padding: 0; list-style: none; display: grid; gap: 1.75rem 3rem; }
+@media (min-width: 40rem) { .feat { grid-template-columns: 1fr 1fr; } }
+.feat b { display: block; font-size: 1.0625rem; }
+.feat span { color: var(--ink-2); }
+.not { margin: 3rem 0 0; padding-top: 1.5rem; border-top: 1px solid var(--line); color: var(--ink-2); max-width: 40rem; }
+.not b { color: var(--ink); }
+
+/* cameras */
+table { width: 100%; border-collapse: collapse; margin: 1.5rem 0 0; }
+th, td { text-align: left; padding: 0.9rem 1rem 0.9rem 0; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { font-weight: 700; width: 42%; }
+td { color: var(--ink-2); }
+td.ok { color: var(--ink); font-weight: 600; }
+.basics { margin: 0; max-width: 38rem; }
+
+/* automation */
+.links { margin: 1.5rem 0 0; padding: 0; list-style: none; }
+.links li { display: grid; gap: 0.25rem 2rem; padding: 0.85rem 0; border-bottom: 1px solid var(--line); }
+@media (min-width: 40rem) { .links li { grid-template-columns: minmax(0, 17rem) 1fr; align-items: baseline; } }
+.links code { overflow-wrap: anywhere; }
+.links span { color: var(--ink-2); }
+.try { margin-top: 2rem; }
+.try p { margin: 0 0 0.75rem; color: var(--ink-2); max-width: 38rem; }
+
+/* free */
+.facts { margin: 0 0 2rem; padding: 0; list-style: none; display: grid; gap: 1rem; max-width: 40rem; }
+.facts b { font-weight: 700; }
+.facts span { color: var(--ink-2); }
+.install { max-width: 40rem; color: var(--ink-2); }
+.install b { color: var(--ink); }
+.repo { margin-top: 2rem; display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; }
+
+footer { padding-block: 2rem 3rem; color: var(--ink-2); font-size: 0.9375rem; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <nav class="nav" aria-label="Main">
+      <a class="brand" href="#top"><img src="icon.png" alt="" width="32" height="32">Camdeck</a>
+      <a href="#what">What it does</a>
+      <a href="#cameras">Cameras</a>
+      <a href="#automation">Automation</a>
+      <a href="https://github.com/thevrus/camdeck">GitHub</a>
+    </nav>
+  </div>
+  <div class="wrap hero-body" id="top">
+    <img class="hero-icon" src="icon.png" alt="Camdeck app icon" width="136" height="136">
+    <h1>Camdeck sets up your webcam <span>and gets out of the way.</span></h1>
+    <p class="lede">No virtual camera, no video pipeline, no effects engine. Settings are written to the camera, so every app sees them.</p>
+    <div class="get">
+      <div class="dl">
+        <a class="btn" href="https://github.com/thevrus/camdeck/releases/latest/download/Camdeck.dmg">Download for Mac</a>
+        <span class="fine">Free. macOS 26, Apple Silicon.</span>
+      </div>
+      <div class="brew">
+        <span class="brew-label">or with Homebrew</span>
+        <div class="cmd">
+          <code id="brew">brew install --cask thevrus/tap/camdeck</code>
+          <button class="copy" type="button" data-copy="brew install --cask thevrus/tap/camdeck" aria-label="Copy the Homebrew command">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+<div class="island">
+  <section class="island-in" id="demo" aria-labelledby="demo-h">
+    <h2 id="demo-h">Set it once. <span>Every app sees it.</span></h2>
+    <p class="sub">Camdeck writes each setting to the camera itself, not to a copy of the video. Move the slider and watch what the apps see. This is an illustration, not a live feed.</p>
+    <div class="demo">
+      <div class="node">
+        <div class="row"><label for="bright">Brightness</label><b><output id="o-main" for="bright">62</output></b></div>
+        <input id="bright" type="range" min="0" max="100" value="62">
+        <small>In Camdeck</small>
+      </div>
+      <div class="wire" aria-hidden="true"></div>
+      <div class="node">
+        <h3>Your webcam</h3>
+        <div class="row"><span>Brightness</span><b><output id="o-cam">62</output></b></div>
+        <small>Written to the camera over USB</small>
+      </div>
+      <div class="wire" aria-hidden="true"></div>
+      <div class="node">
+        <h3>What apps see</h3>
+        <div class="apps" id="apps">
+          <div class="app"><span>Zoom</span><div class="bar"><i></i></div><b>62</b></div>
+          <div class="app"><span>Google Meet</span><div class="bar"><i></i></div><b>62</b></div>
+          <div class="app"><span>Teams</span><div class="bar"><i></i></div><b>62</b></div>
+          <div class="app"><span>OBS</span><div class="bar"><i></i></div><b>62</b></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<section id="what" aria-labelledby="what-h">
+  <div class="wrap split">
+    <h2 id="what-h">What it does</h2>
+    <div>
+      <ul class="feat">
+        <li><b>Live preview</b><span>Flip it like a mirror and pick the video quality.</span></li>
+        <li><b>Picture controls</b><span>Brightness, contrast, color, sharpness, focus and flicker.</span></li>
+        <li><b>Exposure</b><span>Let the camera decide, or set it yourself.</span></li>
+        <li><b>Zoom and move the view</b><span>One draggable pad.</span></li>
+        <li><b>Auto framing</b><span>Follows your face and keeps you centered.</span></li>
+        <li><b>Presets</b><span>Store your settings and bring them back in one click.</span></li>
+        <li><b>Per-app presets</b><span>Apply a preset when a chosen app opens the camera.</span></li>
+        <li><b>Zebra stripes</b><span>Spot blown-out highlights in the preview.</span></li>
+        <li><b>Mac video effects</b><span>Portrait, Studio Light and Background, from Apple.</span></li>
+        <li><b>Menu bar</b><span>Run from the menu bar and open at login, if you like. Nothing runs unless you want it to.</span></li>
+      </ul>
+      <p class="not"><b>What it will not do:</b> virtual camera, backgrounds, filters, overlays, recording. Anything that renders or re-encodes video is out, on purpose. It is why Camdeck stays small and the picture stays untouched.</p>
+    </div>
+  </div>
+</section>
+
+<section id="cameras" aria-labelledby="cameras-h">
+  <div class="wrap split">
+    <h2 id="cameras-h">Supported cameras</h2>
+    <div>
+      <p class="basics">Almost any USB webcam works for the basics: picture, exposure, zoom, focus and color. That includes Logitech Brio and C920, Elgato Facecam, Razer Kiyo and Anker PowerConf. Some get extras.</p>
+      <table>
+        <tbody>
+          <tr><th scope="row">Insta360 Link 2C</th><td class="ok">Fully tested. Adds digital pan and tilt, HDR and shutter speed.</td></tr>
+          <tr><th scope="row">Insta360 Link 2, Link</th><td>Should work, not tested yet.</td></tr>
+          <tr><th scope="row">AnkerWork C310, PowerConf C200</th><td>Early support, not tested on real hardware.</td></tr>
+          <tr><th scope="row">OBSBOT Tiny 2, Tiny SE, Meet</th><td>Planned.</td></tr>
+          <tr><th scope="row">Opal Tadpole, C1</th><td>Planned.</td></tr>
+        </tbody>
+      </table>
+      <p class="basics" style="margin-top:1.5rem">Own a camera that is not listed? <a href="https://github.com/thevrus/camdeck/issues">Open an issue</a> and we will look at adding it.</p>
+    </div>
+  </div>
+</section>
+
+<section id="automation" aria-labelledby="automation-h">
+  <div class="wrap split">
+    <h2 id="automation-h">Automation</h2>
+    <div>
+      <p class="sub" style="margin-bottom:0">Camdeck answers to <code>camdeck://</code> links, so Shortcuts, Raycast and the Terminal can control it without opening the window. Shortcuts also has native actions: Apply Preset, Reset View and Reset Image.</p>
+      <ul class="links">
+        <li><code>camdeck://preset/Meeting</code><span>Apply a preset by name, or by number: <code>preset/2</code></span></li>
+        <li><code>camdeck://reset-view</code><span>Center the view and zoom out</span></li>
+        <li><code>camdeck://reset-image</code><span>Brightness, color and exposure back to defaults</span></li>
+        <li><code>camdeck://reset</code><span>Reset all settings. Presets are kept</span></li>
+        <li><code>camdeck://lock/on</code><span>Turn "Keep These Settings" on. <code>lock/off</code> turns it off</span></li>
+        <li><code>camdeck://camera/Name</code><span>Switch to a camera by name or ID</span></li>
+      </ul>
+      <div class="try">
+        <p>Add <code>?camera=Name</code> to any link to pick the camera first.</p>
+        <div class="cmd" style="max-width:36rem">
+          <code>open -g "camdeck://preset/Meeting"</code>
+          <button class="copy" type="button" data-copy='open -g "camdeck://preset/Meeting"' aria-label="Copy the Terminal command">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="free" aria-labelledby="free-h">
+  <div class="wrap split">
+    <h2 id="free-h">Open source. <span>Free.</span></h2>
+    <div>
+      <ul class="facts">
+        <li><b>MIT licensed.</b> <span>Use it, share it, read the code.</span></li>
+        <li><b>No driver.</b> <span>Nothing is added to your system.</span></li>
+        <li><b>Updates itself.</b> <span>New versions install quietly, or choose Camdeck, Check for Updates.</span></li>
+        <li><b>Replaces the maker's app.</b> <span>Insta360, OBSBOT and Opal ship their own heavy control apps, each for one brand. You can uninstall them.</span></li>
+      </ul>
+      <p class="install"><b>First launch:</b> if macOS says it could not verify Camdeck, open System Settings, Privacy &amp; Security, and click Open Anyway. You do this once.</p>
+      <div class="repo">
+        <a href="https://github.com/thevrus/camdeck">Source on GitHub</a>
+        <a href="https://github.com/thevrus/camdeck/releases">All releases</a>
+        <a href="https://github.com/thevrus/camdeck/issues">Report a problem</a>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Camdeck. MIT license.</span>
+    <span>Not affiliated with Insta360, OBSBOT, Opal or Logitech.</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var range = document.getElementById("bright");
+  var island = document.getElementById("demo");
+  function set(v) {
+    island.style.setProperty("--v", v);
+    document.getElementById("o-main").textContent = v;
+    document.getElementById("o-cam").textContent = v;
+    var apps = document.querySelectorAll("#apps .app");
+    for (var i = 0; i < apps.length; i++) {
+      apps[i].querySelector("b").textContent = v;
+      apps[i].querySelector(".bar i").style.setProperty("--v", v);
+    }
+  }
+  if (range) {
+    range.addEventListener("input", function () { set(range.value); });
+  }
+  var buttons = document.querySelectorAll(".copy");
+  Array.prototype.forEach.call(buttons, function (b) {
+    b.addEventListener("click", function () {
+      var text = b.getAttribute("data-copy");
+      var done = function () {
+        b.textContent = "Copied";
+        setTimeout(function () { b.textContent = "Copy"; }, 1600);
+      };
+      try {
+        navigator.clipboard.writeText(text).then(done, function () {});
+      } catch (e) {}
+    });
+  });
+})();
+</script>
+</body>
+</html>
