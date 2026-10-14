@@ -136,6 +136,21 @@ public final class UVCDevice: @unchecked Sendable {
         self.transport = UVCTransport(channel: channel, topology: topology, scheduler: scheduler)
     }
 
+    /// bcdUSB and link speed (IOKit USBSpeed enum) from the registry; nil if the device is gone.
+    /// Looked up by vendor/product ID, so two identical cameras read the first match.
+    public var usbLink: (bcdUSB: Int, speed: Int)? {
+        for s in UVCDevice.services() {
+            defer { IOObjectRelease(s) }
+            if UVCDevice.intProp(s, "idVendor") == Int(vendorID), UVCDevice.intProp(s, "idProduct") == Int(productID) {
+                return USBLink.read(s)
+            }
+        }
+        return nil
+    }
+
+    /// Warning for a USB 3 camera linked at USB 2 speed or below.
+    public var usbWarning: USBLinkWarning? { usbLink.flatMap { USBLink.assess(bcdUSB: $0.bcdUSB, speed: $0.speed) } }
+
     /// Pure description used by driver matching.
     public var descriptor: CameraDescriptor {
         CameraDescriptor(vendorID: vendorID, productID: productID, name: name, topology: topology)

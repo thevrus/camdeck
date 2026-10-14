@@ -25,6 +25,10 @@ struct InspectorView: View {
 
     var body: some View {
         Form {
+            if let w = cam.usbWarning {
+                Label(w.message, systemImage: "exclamationmark.triangle")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
             cameraSection
             if hasViewControls || cam.centerStageSupported || cam.state("focus-auto") != nil || !vendorControls(in: "Framing").isEmpty {
                 fold("Framing", $framingOpen) {
