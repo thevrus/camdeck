@@ -3,11 +3,18 @@ import SwiftUI
 
 @main
 struct CamdeckApp: App {
-    @State private var cam = CameraController()
+    @NSApplicationDelegateAdaptor(URLAppDelegate.self) private var appDelegate
+    @State private var cam: CameraController
     private var effects: VideoEffects { .shared }
     @AppStorage("advancedControls") private var advanced = false
     @AppStorage("showInMenuBar") private var showMenuBar = true
     @State private var live = false
+
+    init() {
+        let c = CameraController()
+        _cam = State(initialValue: c)
+        URLCommandHandler.shared.cam = c
+    }
 
     /// Red dot on the Dock icon and a filled menu bar glyph while the camera is on.
     private func setLive(_ on: Bool) {
@@ -126,5 +133,12 @@ private struct PresetMenuItems: View {
             @Bindable var lock = lock
             Toggle("Keep These Settings", isOn: $lock.isEnabled)
         }
+    }
+}
+
+/// Receives `camdeck://` URLs. SwiftUI onOpenURL would open a window; this does not.
+final class URLAppDelegate: NSObject, NSApplicationDelegate {
+    func application(_ application: NSApplication, open urls: [URL]) {
+        Task { @MainActor in URLCommandHandler.shared.handle(urls) }
     }
 }

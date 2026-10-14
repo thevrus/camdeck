@@ -39,6 +39,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>SUPublicEDKey</key><string>asQY/g4bqi8QoL8O3CQuX5CsaSb1TgrMb6nuIacY3qI=</string>
     <key>SUEnableAutomaticChecks</key><true/>
     <key>SUAutomaticallyUpdate</key><true/>
+    <key>CFBundleURLTypes</key>
+    <array><dict>
+        <key>CFBundleURLName</key><string>app.camdeck.url</string>
+        <key>CFBundleURLSchemes</key><array><string>camdeck</string></array>
+    </dict></array>
     <key>NSCameraUsageDescription</key><string>Camdeck shows a live preview of your camera and adjusts its controls.</string>
 </dict>
 </plist>

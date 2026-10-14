@@ -26,6 +26,22 @@ Each camera brand ships its own heavy control app, and it only works with that b
 - **Use Mac video effects** like Portrait, Studio Light and Background.
 - **Run from the menu bar** and open at login, if you like.
 
+## Automation
+
+Camdeck answers to `camdeck://` links, so Shortcuts ("Open URL"), Raycast and the Terminal can control it without opening the window.
+
+- `camdeck://preset/Meeting`: apply a preset by name, or by number (`camdeck://preset/2`)
+- `camdeck://reset-view`: center the view and zoom out
+- `camdeck://reset`: reset all settings (presets are kept)
+- `camdeck://lock/on` and `camdeck://lock/off`: turn "Keep These Settings" on or off
+- `camdeck://camera/Name`: switch to a camera by name or ID
+
+Add `?camera=Name` to any link to pick the camera first. Use `%20` for spaces.
+
+```sh
+open -g "camdeck://preset/Meeting"
+```
+
 ## Which cameras work
 
 Almost any USB webcam works for the basics (picture, exposure, zoom, focus, color). That includes Logitech Brio and C920, Elgato Facecam, Razer Kiyo and Anker PowerConf.
