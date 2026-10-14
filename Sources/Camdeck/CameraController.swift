@@ -39,6 +39,8 @@ final class CameraController {
     private(set) var reframe: ReframeState?
     /// Name, serial, firmware, model. Nil until the camera is attached.
     private(set) var deviceInfo: DeviceInfo?
+    /// Set when a USB 3 camera linked at USB 2 speed; read once per attach.
+    private(set) var usbWarning: USBLinkWarning?
     /// Which driver provides each capability (diagnostics).
     private(set) var capabilityProviders: [String: String] = [:]
     // MARK: Presets, settings lock, zebra
@@ -226,6 +228,21 @@ final class CameraController {
             UserDefaults.standard.set(autoFraming.rawValue, forKey: "autoFramingMode")
             framer.configure(mode: autoFraming.framing)
             if autoFraming == .off { isSubjectDetected = false; subjectBox = nil }
+            updateSessionRunning()
+        }
+    }
+
+    // MARK: Session lifetime
+    /// True while the main window shows the preview. The capture session runs only while it is visible or auto
+    /// framing needs frames, so a closed window leaves the camera off and other apps' camera use is detectable.
+    var previewVisible = false { didSet { if oldValue != previewVisible { updateSessionRunning() } } }
+    private var wantsSession: Bool { previewVisible || autoFraming != .off }
+
+    private func updateSessionRunning() {
+        let session = self.session, run = wantsSession && currentDevice != nil
+        sessionQueue.async {
+            if run, !session.isRunning { session.startRunning() }
+            else if !run, session.isRunning { session.stopRunning() }
         }
     }
     // MARK: Center Stage (Continuity Camera / Apple cameras)
@@ -326,7 +343,7 @@ final class CameraController {
         guard let cam = cameras.first(where: { $0.uniqueID == id }) else { return }
         selectedID = id
         let session = self.session
-        let framer = self.framer, attachOutput = framerAttached, mode = autoFraming.framing
+        let framer = self.framer, attachOutput = framerAttached, mode = autoFraming.framing, run = wantsSession
         framerAttached = true
         if !attachOutput {
             framer.zebra = zebra
@@ -340,7 +357,7 @@ final class CameraController {
             if !attachOutput, session.canAddOutput(framer.output) { session.addOutput(framer.output) }
             framer.configure(mode: mode)
             session.commitConfiguration()
-            if !session.isRunning { session.startRunning() }
+            if run, !session.isRunning { session.startRunning() }
         }
         formats = FormatOption.options(for: cam)
         syncFormat(cam)
@@ -398,7 +415,7 @@ final class CameraController {
     }
 
     private func attachUVC() {
-        uvc = nil; camera = nil; reframe = nil; deviceInfo = nil; capabilityProviders = [:]; pendingReframe = nil
+        uvc = nil; camera = nil; reframe = nil; deviceInfo = nil; usbWarning = nil; capabilityProviders = [:]; pendingReframe = nil
         states = []; values = [:]; vendorValues = [:]; profileControls = []; profile = .generic
         pendingVendor = [:]; rereads.values.forEach { $0.cancel() }; rereads = [:]
         guard let id = selectedID, let (v, p) = Self.usbIDs(id) else { return }
@@ -419,6 +436,7 @@ final class CameraController {
             Task { @MainActor in
                 guard let self, self.selectedID == id else { return }
                 self.uvc = dev
+                self.usbWarning = dev?.usbWarning
                 self.camera = cam
                 self.deviceInfo = info
                 self.capabilityProviders = Dictionary(uniqueKeysWithValues: (cam?.plan.providers ?? [:]).map { ($0.key.rawValue, $0.value) })

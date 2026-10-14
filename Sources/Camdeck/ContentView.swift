@@ -50,6 +50,8 @@ struct ContentView: View {
             }
             .animation(.snappy, value: cam.toast)
             .task { cam.start() }
+            .onAppear { cam.previewVisible = true }
+            .onDisappear { cam.previewVisible = false }
             .confirmationDialog("Reset all settings?", isPresented: $cam.confirmingReset, titleVisibility: .visible) {
                 Button("Reset", role: .destructive) { cam.restoreDefaults() }
                 Button("Cancel", role: .cancel) {}

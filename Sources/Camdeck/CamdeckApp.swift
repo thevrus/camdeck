@@ -3,7 +3,7 @@ import SwiftUI
 
 @main
 struct CamdeckApp: App {
-    @NSApplicationDelegateAdaptor(URLAppDelegate.self) private var appDelegate
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var cam: CameraController
     private var effects: VideoEffects { .shared }
     @AppStorage("advancedControls") private var advanced = false
@@ -137,8 +137,35 @@ private struct PresetMenuItems: View {
 }
 
 /// Receives `camdeck://` URLs. SwiftUI onOpenURL would open a window; this does not.
-final class URLAppDelegate: NSObject, NSApplicationDelegate {
+/// URL scheme and global shortcuts. Both work with the main window closed.
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let hotkeys = GlobalHotkeys()
+    private var hotkeysOn = false
+
     func application(_ application: NSApplication, open urls: [URL]) {
         Task { @MainActor in URLCommandHandler.shared.handle(urls) }
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        syncHotkeys()
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.syncHotkeys() }
+        }
+    }
+
+    /// ⌃⌥⌘0 resets the view, ⌃⌥⌘1…5 apply presets 1–5 (same order as ⌘1…⌘5).
+    private func syncHotkeys() {
+        let on = UserDefaults.standard.bool(forKey: "globalHotkeys")
+        guard on != hotkeysOn else { return }
+        hotkeysOn = on
+        guard on else { hotkeys.disable(); return }
+        hotkeys.enable { index in
+            guard let cam = URLCommandHandler.shared.cam else { return }
+            if index == 0 { cam.resetView(); cam.showToast("View reset"); return }
+            guard let presets = cam.presets, presets.items.indices.contains(index - 1) else { return }
+            let p = presets.items[index - 1]
+            presets.apply(p.id)
+            cam.showToast(p.name)
+        }
     }
 }
