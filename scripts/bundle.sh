@@ -37,7 +37,7 @@ appintents() {
     rm -rf "$lists"
     [ -f "$APP/Contents/Resources/Metadata.appintents/extract.actionsdata" ]
 }
-appintents || echo "warning: App Intents metadata not generated; Shortcuts actions will be missing" >&2
+appintents || { echo "warning: App Intents metadata not generated; Shortcuts actions will be missing" >&2; [ -z "${CI:-}" ] || exit 1; }
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

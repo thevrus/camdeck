@@ -49,7 +49,7 @@ Behavior by what is set:
 
 `scripts/sign-notarize.sh` has two modes, both driven by environment variables so it also works locally.
 
-- `app` re-signs `build/Camdeck.app` with `--options runtime --timestamp`, inside-out and without `--deep`, as Sparkle's docs require: `Installer.xpc`, `Downloader.xpc` (with `--preserve-metadata=entitlements`, Sparkle 2.6 and later), `Autoupdate`, `Updater.app`, then `Sparkle.framework`, then the app with `scripts/Camdeck.entitlements`.
+- `app` re-signs `build/Camdeck.app` with `--options runtime --timestamp`, inside-out and without `--deep`, as Sparkle's docs require: `Installer.xpc`, `Downloader.xpc` (its sandbox entitlements are already stripped by `swift build`; that is fine because Camdeck is not sandboxed and Sparkle uses Downloader.xpc only for sandboxed apps), `Autoupdate`, `Updater.app`, then `Sparkle.framework`, then the app with `scripts/Camdeck.entitlements`.
 - `dmg` signs the dmg, runs `xcrun notarytool submit --wait` with the API key, prints Apple's log if the verdict is not `Accepted`, then staples and validates.
 
 The entitlements file holds `com.apple.security.device.camera`, which hardened runtime needs before the app can use the camera, and `com.apple.security.device.usb`. `NSCameraUsageDescription` is already in the Info.plist written by `scripts/bundle.sh`.
