@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @State private var launch = LaunchAtLogin()
     @AppStorage("showInMenuBar") private var showMenuBar = true
+    @AppStorage("globalHotkeys") private var globalHotkeys = false
 
     var body: some View {
         Form {
@@ -15,6 +16,11 @@ struct SettingsView: View {
                 } else {
                     Text("The menu bar item gives quick access to camera, mirror, and reset.")
                 }
+            }
+            Section {
+                Toggle("Global shortcuts", isOn: $globalHotkeys)
+            } footer: {
+                Text("Works in any app: ⌃⌥⌘1–5 apply presets 1–5, ⌃⌥⌘0 resets the view.")
             }
         }
         .formStyle(.grouped)
