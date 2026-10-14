@@ -59,7 +59,7 @@ public final class PresetStore {
 
     private func load() {
         guard let data = try? Data(contentsOf: fileURL) else { return }
-        let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+        let dec = Self.decoder()
         guard let d = try? dec.decode(Disk.self, from: data) else { return }
         items = d.items
         startupPresetID = d.startupPresetID
@@ -67,7 +67,7 @@ public final class PresetStore {
     }
 
     private func persist() {
-        let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601; enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let enc = Self.encoder()
         guard let data = try? enc.encode(Disk(items: items, startupPresetID: startupPresetID, appBindings: appBindings)) else { return }
         try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: fileURL, options: .atomic)
@@ -126,8 +126,8 @@ public final class PresetStore {
     /// The preset to use when another app starts the camera. macOS does not say which app, so only the
     /// frontmost app counts, and only if it is bound: a bound app idling in the background (Zoom left open)
     /// must not hijack FaceTime or Photo Booth.
-    public func preset(forRunning bundleIDs: [String], frontmost: String?) -> Preset? {
-        guard let f = frontmost, bundleIDs.contains(f), let id = appBindings[f] else { return nil }
+    public func preset(frontmost: String?) -> Preset? {
+        guard let f = frontmost, let id = appBindings[f] else { return nil }
         return items.first { $0.id == id }
     }
 
@@ -155,16 +155,14 @@ public final class PresetStore {
 
     /// Pretty JSON `{ "camdeck": 1, "presets": [...] }`, same preset schema as the on-disk file.
     public func exportData() throws -> Data {
-        let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601; enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return try enc.encode(Bundle(camdeck: 1, presets: items))
+        return try Self.encoder().encode(Bundle(camdeck: 1, presets: items))
     }
 
     /// Appends the file's presets with fresh IDs; clashing names become "Name 2", "Name 3"... Returns the count.
     /// Unknown control ids are kept: they are filtered when a preset is applied.
     @discardableResult
     public func importData(_ data: Data) throws -> Int {
-        let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
-        let bundle = try dec.decode(Bundle.self, from: data)
+        let bundle = try Self.decoder().decode(Bundle.self, from: data)
         var names = Set(items.map(\.name))
         for p in bundle.presets {
             let name = Self.unique(Self.clean(p.name) ?? defaultName, in: names)
@@ -180,5 +178,13 @@ public final class PresetStore {
         var n = 2
         while taken.contains("\(name) \(n)") { n += 1 }
         return "\(name) \(n)"
+    }
+
+    private static func encoder() -> JSONEncoder {
+        let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601; e.outputFormatting = [.prettyPrinted, .sortedKeys]; return e
+    }
+
+    private static func decoder() -> JSONDecoder {
+        let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d
     }
 }

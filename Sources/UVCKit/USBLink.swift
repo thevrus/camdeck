@@ -17,7 +17,7 @@ public enum USBLink {
     /// "Device Speed" is `kUSBDevicePropertySpeed` (USBDeviceSpeed numbering). "UsbLinkSpeed" (bits/s) is the
     /// fallback. "USBSpeed" is never used: it is Apple-internal and uses a different enum (3 = high, 4 = super).
     static func read(_ s: io_service_t) -> (bcdUSB: Int, speed: Int)? {
-        func int(_ k: String) -> Int? { IORegistryEntryCreateCFProperty(s, k as CFString, nil, 0)?.takeRetainedValue() as? Int }
+        func int(_ k: String) -> Int? { UVCDevice.intProp(s, k) }
         guard let bcd = int("bcdUSB") else { return nil }
         if let speed = int("Device Speed") { return (bcd, speed) }
         if let bps = int("UsbLinkSpeed") { return (bcd, bps >= 5_000_000_000 ? 3 : bps >= 480_000_000 ? 2 : 1) }

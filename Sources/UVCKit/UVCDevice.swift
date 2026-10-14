@@ -87,7 +87,7 @@ public final class UVCDevice: @unchecked Sendable {
         return r
     }
 
-    private static func intProp(_ s: io_service_t, _ key: String) -> Int? {
+    static func intProp(_ s: io_service_t, _ key: String) -> Int? {
         IORegistryEntryCreateCFProperty(s, key as CFString, nil, 0)?.takeRetainedValue() as? Int
     }
 

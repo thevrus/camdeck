@@ -8,7 +8,7 @@ struct LookField: View {
     @State private var busy = false
     @FocusState private var focused: Bool
 
-    private static let misses: Set<String> = ["", "Couldn't tell what to do"]
+    private static let misses: Set<String> = ["", CameraAgent.nothingDone]
 
     var body: some View {
         HStack(spacing: 12) {

@@ -1,5 +1,6 @@
 import AVFoundation
 import SwiftUI
+import UVCKit
 
 @main
 struct CamdeckApp: App {
@@ -38,6 +39,14 @@ struct CamdeckApp: App {
                 Toggle("Mirror Preview", isOn: $cam.mirrored)
                     .keyboardShortcut("m", modifiers: [.command, .option])
                 Divider()
+                if CameraAgent.unavailableReason == nil {
+                    Button("Describe a Look…") { cam.lookOpen = true }
+                        .keyboardShortcut("l")
+                        .disabled(cam.currentDevice == nil)
+                    Button("Undo Look") { cam.undoLook() }
+                        .disabled(cam.lookUndo == nil)
+                    Divider()
+                }
                 Button("Zoom In") { cam.stepZoom(1) }
                     .keyboardShortcut("+", modifiers: .command)
                 Button("Zoom Out") { cam.stepZoom(-1) }
@@ -148,8 +157,7 @@ private struct PresetMenuItems: View {
     }
 }
 
-/// Receives `camdeck://` URLs. SwiftUI onOpenURL would open a window; this does not.
-/// URL scheme and global shortcuts. Both work with the main window closed.
+/// URL scheme and global shortcuts. SwiftUI onOpenURL would open a window; this does not. Both work with the main window closed.
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkeys = GlobalHotkeys()
     private var hotkeysOn = false
@@ -172,12 +180,7 @@ private struct PresetMenuItems: View {
         hotkeysOn = on
         guard on else { hotkeys.disable(); return }
         hotkeys.enable { index in
-            guard let cam = URLCommandHandler.shared.cam else { return }
-            if index == 0 { cam.resetView(); cam.showToast("View reset"); return }
-            guard let presets = cam.presets, presets.items.indices.contains(index - 1) else { return }
-            let p = presets.items[index - 1]
-            presets.apply(p.id)
-            cam.showToast(p.name)
+            URLCommandHandler.shared.enqueue(index == 0 ? .resetView : .preset("\(index)"))
         }
     }
 }

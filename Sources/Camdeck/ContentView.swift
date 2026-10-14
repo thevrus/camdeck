@@ -5,6 +5,7 @@ struct ContentView: View {
     @Bindable var cam: CameraController
     @AppStorage("showInspector") private var showInspector = true
     @AppStorage("showAllControls") private var showAll = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         preview
@@ -13,8 +14,16 @@ struct ContentView: View {
             .inspector(isPresented: $showInspector) { InspectorView(cam: cam) }
             .inspectorColumnWidth(min: 320, ideal: 380, max: 600)
             .toolbar {
-                ToolbarItem(placement: .primaryAction) { LookField(cam: cam) }
-                ToolbarSpacer(.fixed, placement: .primaryAction)
+                if CameraAgent.unavailableReason == nil {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { cam.lookOpen.toggle() } label: {
+                            Label("Describe a Look", systemImage: "wand.and.sparkles")
+                        }
+                        .disabled(cam.currentDevice == nil)
+                        .help("Describe a Look (⌘L)")
+                    }
+                    ToolbarSpacer(.fixed, placement: .primaryAction)
+                }
                 ToolbarItemGroup(placement: .primaryAction) {
                     cameraMenu
                     Toggle(isOn: $cam.mirrored) {
@@ -26,7 +35,7 @@ struct ContentView: View {
                         Label("Reset View", systemImage: "arrow.counterclockwise")
                     }
                     .labelStyle(.titleAndIcon)
-                    .disabled(!hasViewControls)
+                    .disabled(!cam.hasViewControls)
                     .help("Reset View")
                 }
                 ToolbarSpacer(.fixed, placement: .primaryAction)
@@ -52,6 +61,22 @@ struct ContentView: View {
             .navigationTitle("Camdeck")
             .navigationSubtitle(subtitle)
             .frame(minWidth: 900, minHeight: 560)
+            .overlay {
+                if cam.lookOpen, CameraAgent.unavailableReason == nil {
+                    // Click anywhere off the field to dismiss.
+                    Color.black.opacity(0.25)
+                        .contentShape(.rect)
+                        .onTapGesture { cam.lookOpen = false }
+                        .accessibilityHidden(true)   // Esc closes it for keyboard and VoiceOver users
+                        .transition(.opacity)
+                    // Upper third, like Spotlight, so the face being adjusted stays in view.
+                    LookField(cam: cam)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 72)
+                        .transition(reduceMotion ? .opacity : .scale(scale: 0.96, anchor: .top).combined(with: .opacity))
+                }
+            }
+            .animation(.snappy(duration: 0.2), value: cam.lookOpen)
             .overlay(alignment: .bottom) {
                 if let t = cam.toast {
                     Label(t, systemImage: "checkmark.circle.fill")
@@ -80,7 +105,6 @@ struct ContentView: View {
         return "\(name) · \(f.width)×\(f.height) · \(f.fps) fps"
     }
 
-    private var hasViewControls: Bool { ["zoom", "pantilt", "roll"].contains { cam.state($0) != nil } }
 
     private var cameraMenu: some View {
         Menu {

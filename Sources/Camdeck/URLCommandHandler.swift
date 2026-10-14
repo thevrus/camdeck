@@ -19,9 +19,14 @@ final class URLCommandHandler {
                 Self.log.error("Ignoring unrecognized URL: \(url.absoluteString, privacy: .public)")
                 continue
             }
-            let previous = queue
-            queue = Task { await previous?.value; await run(parsed.command, camera: parsed.camera) }
+            enqueue(parsed.command, camera: parsed.camera)
         }
+    }
+
+    /// Entry point for URLs, Shortcuts actions and global hotkeys alike.
+    func enqueue(_ command: URLCommand, camera: String? = nil) {
+        let previous = queue
+        queue = Task { await previous?.value; await run(command, camera: camera) }
     }
 
     private func run(_ command: URLCommand, camera: String?) async {
@@ -32,25 +37,22 @@ final class URLCommandHandler {
         if let target, !(await selectCamera(target, on: cam)) {
             return fail(cam, "Camera not found: \(target)")
         }
+        guard await waitForCamera(cam), let store = cam.presets else { return fail(cam, "No camera available") }
         switch command {
         case .camera:
             cam.showToast(cam.currentDevice?.localizedName ?? "Camera selected")
         case .resetView:
-            guard await waitForCamera(cam) else { return fail(cam, "No camera available") }
             cam.resetView()
             cam.showToast("View reset")
         case .resetImage:
-            guard await waitForCamera(cam) else { return fail(cam, "No camera available") }
             cam.resetImage()
         case .reset:
-            guard await waitForCamera(cam) else { return fail(cam, "No camera available") }
             cam.restoreDefaults()
         case .lock(let on):
-            guard await waitForCamera(cam), let lock = cam.settingsLock else { return fail(cam, "No camera available") }
+            guard let lock = cam.settingsLock else { return fail(cam, "No camera available") }
             lock.isEnabled = on
             cam.showToast(on ? "Settings locked" : "Settings unlocked")
         case .preset(let name):
-            guard await waitForCamera(cam), let store = cam.presets else { return fail(cam, "No camera available") }
             guard let preset = Self.match(name, in: store.items) else { return fail(cam, "No preset named \(name)") }
             store.apply(preset.id)
             cam.showToast("Applied \(preset.name)")

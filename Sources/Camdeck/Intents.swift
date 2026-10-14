@@ -1,11 +1,11 @@
 import AppIntents
 import Foundation
+import UVCKit
 
-/// Shortcuts actions. Each one forwards to the same `camdeck://` handler the URL scheme uses.
+/// Shortcuts actions. Each one runs through the same command queue the URL scheme uses.
 @MainActor
-private func send(_ url: String) {
-    guard let u = URL(string: url) else { return }
-    URLCommandHandler.shared.handle([u])
+private func send(_ command: URLCommand) {
+    URLCommandHandler.shared.enqueue(command)
 }
 
 struct ApplyPresetIntent: AppIntent {
@@ -17,8 +17,7 @@ struct ApplyPresetIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? name
-        send("camdeck://preset/\(encoded)")
+        send(.preset(name))
         return .result()
     }
 }
@@ -29,7 +28,7 @@ struct ResetViewIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        send("camdeck://reset-view")
+        send(.resetView)
         return .result()
     }
 }
@@ -40,7 +39,7 @@ struct ResetImageIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        send("camdeck://reset-image")
+        send(.resetImage)
         return .result()
     }
 }

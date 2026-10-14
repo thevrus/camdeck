@@ -7,7 +7,7 @@ import Foundation
 public struct LookAdjustment: Equatable, Sendable {
     public var moves: [String: Double] = [:]
     public var levels: [String: Double] = [:]
-    /// Auto toggles to switch: "wb-auto", "ae-mode", "focus-auto".
+    /// Auto toggles to switch: "wb-auto", "ae-mode".
     public var autos: [String: Bool] = [:]
 
     public init(moves: [String: Double] = [:], levels: [String: Double] = [:], autos: [String: Bool] = [:]) {
@@ -47,14 +47,14 @@ public struct LookAdjustment: Equatable, Sendable {
             guard let st = byID[id], st.canSet, let lo = st.min?.first, let hi = st.max?.first, hi > lo else { return nil }
             return (lo, hi, current[id]?.first ?? st.cur?.first ?? st.def?.first ?? lo)
         }
-        func clamp(_ v: Double, _ lo: Int, _ hi: Int) -> [Int] { [Int(v.rounded()).clamped(lo, hi)] }
+        func clamp(_ v: Double, _ lo: Int, _ hi: Int) -> [Int] { [Int(v.rounded()).clamped(to: lo...hi)] }
         for (id, m) in moves where Self.imageControls.contains(id) {
             guard let r = range(id) else { continue }
-            out[id] = clamp(Double(r.cur) + m.clamped(-1, 1) * Double(r.hi - r.lo), r.lo, r.hi)
+            out[id] = clamp(Double(r.cur) + m.clamped(to: -1...1) * Double(r.hi - r.lo), r.lo, r.hi)
         }
         for (id, l) in levels where Self.imageControls.contains(id) {
             guard let r = range(id) else { continue }
-            out[id] = clamp(Double(r.lo) + l.clamped(0, 1) * Double(r.hi - r.lo), r.lo, r.hi)
+            out[id] = clamp(Double(r.lo) + l.clamped(to: 0...1) * Double(r.hi - r.lo), r.lo, r.hi)
         }
         for (id, on) in autos where Self.autoControls.contains(id) {
             guard let st = byID[id], st.canSet else { continue }
@@ -127,6 +127,6 @@ public struct LookAdjustment: Equatable, Sendable {
     }
 }
 
-private extension Comparable {
-    func clamped(_ lo: Self, _ hi: Self) -> Self { min(max(self, lo), hi) }
+extension Comparable {
+    public func clamped(to r: ClosedRange<Self>) -> Self { min(max(self, r.lowerBound), r.upperBound) }
 }

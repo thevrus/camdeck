@@ -4,9 +4,6 @@ import UVCKit
 
 /// Availability of Apple's on-device model (Apple Intelligence). The requests themselves run in CameraAgent.
 enum LookAssistant {
-    /// Describe a Look is shown only when the on-device model can run on this Mac right now.
-    static var isAvailable: Bool { SystemLanguageModel.default.isAvailable }
-
     /// Nil when the on-device model can be used; otherwise a short reason for the UI.
     static var unavailableReason: String? {
         switch SystemLanguageModel.default.availability {

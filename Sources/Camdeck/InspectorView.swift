@@ -86,7 +86,8 @@ struct InspectorView: View {
             }
         }
         .formStyle(.grouped)
-        .onChange(of: exposureOpen) { _, open in if open { Task { await cam.refreshAutoReadout() } } }
+        .onChange(of: showAll && exposureOpen, initial: true) { _, on in cam.autoReadoutVisible = on }
+        .onDisappear { cam.autoReadoutVisible = false }
         .animation(.snappy, value: cam.value("zoom"))
         .animation(.snappy, value: cam.selectedFormatID)
         // Opaque on purpose: the glass inspector over dark video made text unreadable.
@@ -100,7 +101,7 @@ struct InspectorView: View {
     private var showFraming: Bool {
         let core = ["zoom", "pantilt"].contains { cam.state($0) != nil } || cam.centerStageSupported
         guard showAll else { return core }
-        return hasViewControls || core || cam.state("focus-auto") != nil || !vendorControls(in: "Framing").isEmpty
+        return cam.hasViewControls || core || cam.state("focus-auto") != nil || !vendorControls(in: "Framing").isEmpty
     }
 
     // MARK: Hidden changes
@@ -351,9 +352,14 @@ struct InspectorView: View {
         }
     }
 
-    private static func appName(_ bundleID: String) -> String {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+    /// LaunchServices lookups are slow for a per-render call; names do not change while the app runs.
+    @MainActor private static var appNames: [String: String] = [:]
+    @MainActor private static func appName(_ bundleID: String) -> String {
+        if let n = appNames[bundleID] { return n }
+        let n = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
             .map { FileManager.default.displayName(atPath: $0.path).replacingOccurrences(of: ".app", with: "") } ?? bundleID
+        appNames[bundleID] = n
+        return n
     }
 
     private func pickApp(for id: UUID, in presets: PresetStore) {
@@ -381,7 +387,6 @@ struct InspectorView: View {
 
     // MARK: View
 
-    private var hasViewControls: Bool { ["zoom", "pantilt", "roll"].contains { cam.state($0) != nil } }
 
     @ViewBuilder
     private var framingRow: some View {
@@ -417,7 +422,7 @@ struct InspectorView: View {
         if showAll {
             vendorRows(vendorControls(in: "Framing"))
         }
-        if showAll, hasViewControls {
+        if showAll, cam.hasViewControls {
             Button("Reset View") { cam.resetView() }
                 .help("Return zoom and framing to the full field of view.")
         }
@@ -599,6 +604,3 @@ struct InspectorView: View {
     }
 }
 
-private extension Comparable {
-    func clamped(to r: ClosedRange<Self>) -> Self { min(max(self, r.lowerBound), r.upperBound) }
-}
