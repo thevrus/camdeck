@@ -6,7 +6,7 @@ struct CamdeckApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var cam: CameraController
     private var effects: VideoEffects { .shared }
-    @AppStorage("advancedControls") private var advanced = false
+    @AppStorage("showAllControls") private var showAll = false
     @AppStorage("showInMenuBar") private var showMenuBar = true
     @State private var live = false
 
@@ -58,7 +58,7 @@ struct CamdeckApp: App {
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                     .disabled(cam.currentDevice == nil)
                 Divider()
-                Toggle("Advanced Controls", isOn: $advanced)
+                Toggle("Show All Controls", isOn: $showAll)
                     .keyboardShortcut("a", modifiers: [.command, .shift])
                 Divider()
                 Button("Video Effects…") { effects.openSystemPanel() }

@@ -4,6 +4,7 @@ struct SettingsView: View {
     @State private var launch = LaunchAtLogin()
     @AppStorage("showInMenuBar") private var showMenuBar = true
     @AppStorage("globalHotkeys") private var globalHotkeys = false
+    @AppStorage("showAllControls") private var showAll = false
 
     var body: some View {
         Form {
@@ -21,6 +22,11 @@ struct SettingsView: View {
                 Toggle("Global shortcuts", isOn: $globalHotkeys)
             } footer: {
                 Text("Works in any app: ⌃⌥⌘1–5 apply presets 1–5, ⌃⌥⌘0 resets the view.")
+            }
+            Section {
+                Toggle("Show All Controls", isOn: $showAll)
+            } footer: {
+                Text("Shows every setting your camera supports: manual exposure, color fine-tuning, device details and preset tools.")
             }
         }
         .formStyle(.grouped)
