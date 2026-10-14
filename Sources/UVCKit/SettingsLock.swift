@@ -41,7 +41,9 @@ public final class SettingsLock {
     @ObservationIgnored public var isAutoFramingActive: () -> Bool
     @ObservationIgnored private var lastCheck: Date?
     @ObservationIgnored private var debounceTask: Task<Void, Never>?
-    @ObservationIgnored private var eventChecks: Task<Void, Never>?
+    @ObservationIgnored private(set) var eventChecks: Task<Void, Never>?
+    /// Test hook: replaces the wall-clock wait for each camera-start check; gets that check's offset from the start event.
+    @ObservationIgnored var eventSleep: ((Duration) async throws -> Void)?
     @ObservationIgnored private nonisolated(unsafe) var observer: NSObjectProtocol?
 
     /// - capture: current settings (CameraController.captureSettings).
@@ -113,12 +115,12 @@ public final class SettingsLock {
     public func cameraStartedElsewhere() {
         guard isEnabled else { return }
         eventChecks?.cancel()
-        let delays = eventDelays
+        let delays = eventDelays, sleep = eventSleep
         eventChecks = Task { [weak self] in
             let clock = ContinuousClock()
             let start = clock.now
             for d in delays {
-                try? await clock.sleep(until: start + d)
+                if let sleep { try? await sleep(d) } else { try? await clock.sleep(until: start + d) }
                 guard !Task.isCancelled, let self else { return }
                 await self.verify(force: true)
                 guard !Task.isCancelled else { return }

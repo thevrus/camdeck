@@ -64,45 +64,83 @@ final class SettingsLockTests: XCTestCase {
         XCTAssertTrue(writes.isEmpty)  // snapshot recaptured with the user's value
     }
 
+    /// Stands in for the camera-start waits: each check parks in `sleep` until the test resumes it, so no wall clock is involved.
+    final class Gate {
+        private var waiting = AsyncStream<(Duration, CheckedContinuation<Void, Error>)>.makeStream()
+        private lazy var iterator = waiting.stream.makeAsyncIterator()
+        func sleep(_ d: Duration) async throws {
+            try await withCheckedThrowingContinuation { waiting.continuation.yield((d, $0)) }
+        }
+        /// Returns once the check task is parked in `sleep` (so every earlier check has finished).
+        @MainActor func next() async -> (Duration, CheckedContinuation<Void, Error>) { await iterator.next()! }
+    }
+
+    func gated(_ lock: SettingsLock) -> Gate {
+        let gate = Gate()
+        lock.eventSleep = gate.sleep
+        return gate
+    }
+
     func testCameraStartCheckFixesDriftTwiceBypassingGap() async throws {
         let lock = make(name: "d")
+        let gate = gated(lock)
         lock.isEnabled = true
         lock.cameraStartedElsewhere()
-        try await Task.sleep(for: .milliseconds(10))
+        let task = try XCTUnwrap(lock.eventChecks)
+        let (d1, first) = await gate.next()
+        XCTAssertEqual(d1, .milliseconds(40))
         XCTAssertTrue(reads.isEmpty)  // nothing before the first delay
         device["brightness"] = [50]
-        try await Task.sleep(for: .milliseconds(70))  // ~80 ms: first check
+        first.resume()
+        let (d2, second) = await gate.next()  // first check done
+        XCTAssertEqual(d2, .milliseconds(120))  // offset from the start event, not from the first check
         XCTAssertEqual(writes, ["brightness"])
         XCTAssertEqual(reads.count, 1)
         device["contrast"] = [9]  // clock unchanged, so the 10 s gap would block a normal verify()
-        try await Task.sleep(for: .milliseconds(150))  // ~230 ms: second check
+        second.resume()
+        await task.value
         XCTAssertEqual(writes, ["brightness", "contrast"])
         XCTAssertEqual(reads.count, 2)
     }
 
     func testNewerStartEventReplacesPending() async throws {
         let lock = make(name: "e")
+        let gate = gated(lock)
         lock.isEnabled = true
         lock.cameraStartedElsewhere()
-        try await Task.sleep(for: .milliseconds(20))
+        let old = try XCTUnwrap(lock.eventChecks)
+        let (_, parked) = await gate.next()
         lock.cameraStartedElsewhere()  // restarts the schedule
-        try await Task.sleep(for: .milliseconds(350))
+        parked.resume()  // the replaced task wakes cancelled
+        await old.value
+        XCTAssertTrue(reads.isEmpty)
+        let task = try XCTUnwrap(lock.eventChecks)
+        await gate.next().1.resume()
+        await gate.next().1.resume()
+        await task.value
         XCTAssertEqual(reads.count, 2)  // not 4
     }
 
     func testPendingChecksCancelledOnUserChangeAndDisable() async throws {
         let lock = make(name: "f")
+        let gate = gated(lock)
         lock.isEnabled = true
         lock.cameraStartedElsewhere()
+        var task = try XCTUnwrap(lock.eventChecks)
         lock.userDidChange()
-        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertNil(lock.eventChecks)
+        await gate.next().1.resume()
+        await task.value
         XCTAssertTrue(reads.isEmpty)
         lock.cameraStartedElsewhere()
+        task = try XCTUnwrap(lock.eventChecks)
         lock.isEnabled = false
-        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertNil(lock.eventChecks)
+        await gate.next().1.resume()
+        await task.value
         XCTAssertTrue(reads.isEmpty)
         lock.cameraStartedElsewhere()  // disabled: no-op
-        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertNil(lock.eventChecks)
         XCTAssertTrue(reads.isEmpty)
     }
 
