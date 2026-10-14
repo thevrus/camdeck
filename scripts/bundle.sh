@@ -24,12 +24,14 @@ xcrun actool scripts/Camdeck.icon --compile "$APP/Contents/Resources" --app-icon
 # extractor, so run appintentsmetadataprocessor by hand. It writes <output>/Metadata.appintents.
 # Best effort: a toolchain with a different build layout loses the Shortcuts actions, not the release.
 appintents() {
-    local obj="$(dirname "$BIN")/../../out/Intermediates.noindex/Camdeck.build/Release/Camdeck-p.build/Objects-normal/arm64"
-    [ -d "$obj" ] || obj="$(dirname "$(find .build -path '*Release/Camdeck-p.build*' -name Camdeck-primary.swiftconstvalues | head -1)")"
-    [ -f "$obj/Camdeck.SwiftFileList" ] || { echo "appintents: no Camdeck.SwiftFileList in '$obj'" >&2; return 1; }
+    # Swift 6.4 writes Camdeck-p.build/Camdeck.SwiftFileList; 6.3 writes Camdeck-<hash>-testable.build/
+    # Camdeck-<hash>-testable.SwiftFileList. The const-values file sits next to it either way.
+    local list; list="$(find .build -path '*/Release/*/Objects-normal/arm64/*' \
+        \( -name Camdeck.SwiftFileList -o -name 'Camdeck-*-testable.SwiftFileList' \) | head -1)"
+    [ -n "$list" ] || { echo "appintents: no Camdeck SwiftFileList under .build" >&2; return 1; }
     local lists; lists="$(mktemp -d)"
-    cp "$obj/Camdeck.SwiftFileList" "$lists/src.txt"
-    echo "$obj/Camdeck-primary.swiftconstvalues" > "$lists/const.txt"
+    cp "$list" "$lists/src.txt"
+    echo "${list%.SwiftFileList}-primary.swiftconstvalues" > "$lists/const.txt"
     xcrun appintentsmetadataprocessor --output "$APP/Contents/Resources" \
         --toolchain-dir "$(dirname "$(dirname "$(dirname "$(xcrun --find swiftc)")")")" \
         --module-name Camdeck --sdk-root "$(xcrun --show-sdk-path)" \
