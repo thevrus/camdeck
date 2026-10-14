@@ -107,16 +107,25 @@ private struct OpenMainWindowButton: View {
 /// Center Stage toggle and auto framing modes, each hidden when the camera lacks it. Shared by the menus and the inspector.
 struct FramingModeControls: View {
     @Bindable var cam: CameraController
+    var footnotes = false
     var body: some View {
         if cam.centerStageSupported {
             Toggle("Center Stage", isOn: Binding(get: { cam.centerStageEnabled }, set: { cam.setCenterStage($0) }))
                 .help("Keeps you centered as you move. Done by the camera itself.")
+            if footnotes {
+                Text("Apple's built-in tracking. The camera pans and zooms to keep you centered as you move.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
         }
         if cam.canAutoFrame {
             Picker("Auto Framing", selection: $cam.autoFraming) {
                 ForEach(AutoFramingMode.allCases) { Text($0.title).tag($0) }
             }
             .help("Keeps you in frame by zooming and reframing automatically. Close, Medium and Wide set how tight.")
+            if footnotes {
+                Text("Crops and zooms to keep you in frame as you move. Close is tightest, Wide leaves the most room around you.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
         }
     }
 }

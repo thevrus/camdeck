@@ -40,19 +40,18 @@ struct InspectorView: View {
                 }
             }
             if hasAny(Self.basicImage) || !vendorControls(in: "Image").isEmpty {
-                fold("Image", $imageOpen) {
+                fold("Image", $imageOpen, reset: { cam.resetImage() }) {
                     imageRows(Self.basicImage)
                     vendorRows(vendorControls(in: "Image"))
-                    Button("Reset Image & Color") { cam.resetImage() }
-                        .help("Brightness, contrast, color, white balance and exposure go back to the camera's defaults. Zoom, framing and format stay.")
                 }
             }
             if hasAny(Self.exposureIDs) {
-                fold("Color & Exposure", $exposureOpen) {
+                fold("Color & Exposure", $exposureOpen, reset: { cam.resetImage() }) {
                     imageRows(Self.exposureIDs)
                     @Bindable var zebra = cam.zebra
                     Toggle("Show Clipping", isOn: $zebra.isEnabled)
                         .help("Stripes over areas that are blown out to pure white, so you can lower exposure until they disappear.")
+                    footnote("Marks parts of the preview that are overexposed (pure white, detail lost) with stripes. Lower Exposure or Brightness until they vanish. Only affects the preview, not what other apps see.")
                 }
             }
             if !effects.items.isEmpty { effectsSection }
@@ -82,10 +81,11 @@ struct InspectorView: View {
     private func hasAny(_ ids: [String]) -> Bool { ids.contains { cam.state($0) != nil } }
 
     /// Collapsible section whose whole header row is the click target (the native disclosure only hits the tiny chevron).
-    private func fold<C: View>(_ title: String, _ open: Binding<Bool>, @ViewBuilder content: () -> C) -> some View {
+    private func fold<C: View>(_ title: String, _ open: Binding<Bool>, reset: (() -> Void)? = nil, @ViewBuilder content: () -> C) -> some View {
         Section {
             if open.wrappedValue { content() }
         } header: {
+            HStack(spacing: 8) {
             Button { withAnimation(.snappy) { open.wrappedValue.toggle() } } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.right")
@@ -103,6 +103,13 @@ struct InspectorView: View {
             }
             .buttonStyle(.plain)
             .accessibilityValue(open.wrappedValue ? "expanded" : "collapsed")
+            if let reset, open.wrappedValue {
+                Button("Reset", action: reset)
+                    .buttonStyle(.link)
+                    .font(.subheadline)
+                    .help("Put these settings back to the camera's defaults.")
+            }
+            }
         }
     }
 
@@ -278,7 +285,7 @@ struct InspectorView: View {
 
     @ViewBuilder
     private var viewRows: some View {
-        FramingModeControls(cam: cam)
+        FramingModeControls(cam: cam, footnotes: true)
         if cam.canAutoFrame, cam.autoFraming != .off {
             footnote(cam.isSubjectDetected ? "Following you. Manual framing is paused." : "Looking for a person…")
         }
@@ -330,6 +337,9 @@ struct InspectorView: View {
                     ForEach(opts.filter { (lo ... hi).contains($0.value) }, id: \.value) { Text($0.label).tag($0.value) }
                 }
                 .help(helpText(st.id))
+                if st.id == "powerline" {
+                    footnote("Pick your country's mains frequency: 60 Hz in the Americas, 50 Hz in Europe and most of Asia. Fixes flickering or banding under artificial light.")
+                }
             case .panTilt: EmptyView()
             }
         }
@@ -412,6 +422,7 @@ struct InspectorView: View {
             sliderRow(name: st.control.name, valueText: st.id == "wb-temp" ? "\(v) K" : "\(v)",
                       value: Binding(get: { Double(cam.value(st.id).first ?? lo) }, set: { cam.set(st.id, [Int($0.rounded())]) }),
                       range: Double(lo) ... Double(hi), step: 1,
+                      isModified: st.def.map { $0 != cam.value(st.id) } ?? false,
                       onReset: { cam.reset(st.id) })
                 .disabled(disabled || !st.canSet)
                 .help(helpText(st.id))
@@ -442,11 +453,17 @@ struct InspectorView: View {
     }
 
     private func sliderRow(name: String, valueText: String, value: Binding<Double>,
-                           range: ClosedRange<Double>, step: Double, onReset: @escaping () -> Void) -> some View {
+                           range: ClosedRange<Double>, step: Double, isModified: Bool = false, onReset: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(name)
                 Spacer()
+                if isModified {
+                    Button(action: onReset) { Image(systemName: "arrow.counterclockwise") }
+                        .buttonStyle(.borderless)
+                        .help("Reset \(name) to default")
+                        .accessibilityLabel("Reset \(name)")
+                }
                 Text(valueText).foregroundStyle(.secondary).monospacedDigit()
             }
             Slider(value: Binding(get: { value.wrappedValue },
