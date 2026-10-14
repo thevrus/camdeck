@@ -18,6 +18,26 @@ cp -R "$(dirname "$BIN")/Camdeck_UVCKit.bundle" "$APP/Contents/Resources/"
 xcrun actool scripts/Camdeck.icon --compile "$APP/Contents/Resources" --app-icon Camdeck \
     --platform macosx --minimum-deployment-target 26.0 \
     --output-partial-info-plist build/icon-info.plist >/dev/null
+# App Intents (Shortcuts): `swift build` emits the const-values but never runs the metadata
+# extractor, so run appintentsmetadataprocessor by hand. It writes <output>/Metadata.appintents.
+# Best effort: a toolchain with a different build layout loses the Shortcuts actions, not the release.
+appintents() {
+    local obj="$(dirname "$BIN")/../../out/Intermediates.noindex/Camdeck.build/Release/Camdeck-p.build/Objects-normal/arm64"
+    [ -d "$obj" ] || obj="$(dirname "$(find .build -path '*Release/Camdeck-p.build*' -name Camdeck-primary.swiftconstvalues | head -1)")"
+    [ -f "$obj/Camdeck.SwiftFileList" ] || return 1
+    local lists; lists="$(mktemp -d)"
+    cp "$obj/Camdeck.SwiftFileList" "$lists/src.txt"
+    echo "$obj/Camdeck-primary.swiftconstvalues" > "$lists/const.txt"
+    xcrun appintentsmetadataprocessor --output "$APP/Contents/Resources" \
+        --toolchain-dir "$(dirname "$(dirname "$(dirname "$(xcrun --find swiftc)")")")" \
+        --module-name Camdeck --sdk-root "$(xcrun --show-sdk-path)" \
+        --xcode-version "$(xcodebuild -version | awk '/Build version/{print $3}')" \
+        --platform-family macOS --deployment-target 26.0 --target-triple arm64-apple-macosx26.0 \
+        --source-file-list "$lists/src.txt" --swift-const-vals-list "$lists/const.txt" >/dev/null
+    rm -rf "$lists"
+    [ -f "$APP/Contents/Resources/Metadata.appintents/extract.actionsdata" ]
+}
+appintents || echo "warning: App Intents metadata not generated; Shortcuts actions will be missing" >&2
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
