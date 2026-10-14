@@ -51,6 +51,8 @@ final class CameraController {
     /// > 0 while the lock re-asserts its snapshot: those writes are not user edits.
     @ObservationIgnored private var quietWrites = 0
     @ObservationIgnored private var activationObserver: NSObjectProtocol?
+    /// Watches whether another app uses the selected camera; replaced on every attach.
+    @ObservationIgnored private var usage: (monitor: CameraUsageMonitor, stopObserver: NSObjectProtocol)?
     /// Observed: zoomFactorRange, zoomFactor and the auto framing UI depend on it.
     private var camera: CameraDevice?
     @ObservationIgnored private var pendingReframe: CGPoint?
@@ -111,6 +113,19 @@ final class CameraController {
         store.onApplied = { [weak lock] in lock?.userDidChange() }
         presets = store
         settingsLock = lock
+        usage?.monitor.stop()
+        usage.map { NotificationCenter.default.removeObserver($0.stopObserver) }
+        usage = nil
+        let monitor = CameraUsageMonitor(uniqueID: id)
+        // Flag false -> true while our own session is idle: another app opened the camera.
+        monitor.onChange = { [weak self, weak lock] running in
+            if running, self?.session.isRunning == false { lock?.cameraStartedElsewhere() }
+        }
+        // Our session stopped but the flag stays true: another app still holds the camera.
+        let stopObserver = NotificationCenter.default.addObserver(forName: AVCaptureSession.didStopRunningNotification, object: session, queue: .main) { [weak monitor, weak lock] _ in
+            MainActor.assumeIsolated { if monitor?.isRunningSomewhere == true { lock?.cameraStartedElsewhere() } }
+        }
+        usage = (monitor, stopObserver)
         if lock.isEnabled { lock.attached() } else { store.applyStartup() }
     }
 

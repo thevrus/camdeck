@@ -9,9 +9,9 @@ final class SettingsLockTests: XCTestCase {
     var autoFraming = false
     var reads: [[String]] = []
 
-    func make(name: String) -> SettingsLock {
+    func make(name: String, eventDelays: [Duration] = [.milliseconds(40), .milliseconds(120)]) -> SettingsLock {
         let d = UserDefaults(suiteName: "lock-test-\(name)-\(UUID())")!
-        return SettingsLock(uniqueID: name, defaults: d, now: { self.clock }, debounce: .milliseconds(50),
+        return SettingsLock(uniqueID: name, defaults: d, now: { self.clock }, debounce: .milliseconds(50), eventDelays: eventDelays,
                             observeAppActivation: false,
                             capture: { CameraSettings(standard: self.device, profile: [:], format: nil) },
                             apply: { _ in 0 },
@@ -62,6 +62,48 @@ final class SettingsLockTests: XCTestCase {
         clock += 20
         await lock.verify()
         XCTAssertTrue(writes.isEmpty)  // snapshot recaptured with the user's value
+    }
+
+    func testCameraStartCheckFixesDriftTwiceBypassingGap() async throws {
+        let lock = make(name: "d")
+        lock.isEnabled = true
+        lock.cameraStartedElsewhere()
+        try await Task.sleep(for: .milliseconds(10))
+        XCTAssertTrue(reads.isEmpty)  // nothing before the first delay
+        device["brightness"] = [50]
+        try await Task.sleep(for: .milliseconds(70))  // ~80 ms: first check
+        XCTAssertEqual(writes, ["brightness"])
+        XCTAssertEqual(reads.count, 1)
+        device["contrast"] = [9]  // clock unchanged, so the 10 s gap would block a normal verify()
+        try await Task.sleep(for: .milliseconds(150))  // ~230 ms: second check
+        XCTAssertEqual(writes, ["brightness", "contrast"])
+        XCTAssertEqual(reads.count, 2)
+    }
+
+    func testNewerStartEventReplacesPending() async throws {
+        let lock = make(name: "e")
+        lock.isEnabled = true
+        lock.cameraStartedElsewhere()
+        try await Task.sleep(for: .milliseconds(20))
+        lock.cameraStartedElsewhere()  // restarts the schedule
+        try await Task.sleep(for: .milliseconds(350))
+        XCTAssertEqual(reads.count, 2)  // not 4
+    }
+
+    func testPendingChecksCancelledOnUserChangeAndDisable() async throws {
+        let lock = make(name: "f")
+        lock.isEnabled = true
+        lock.cameraStartedElsewhere()
+        lock.userDidChange()
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertTrue(reads.isEmpty)
+        lock.cameraStartedElsewhere()
+        lock.isEnabled = false
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertTrue(reads.isEmpty)
+        lock.cameraStartedElsewhere()  // disabled: no-op
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertTrue(reads.isEmpty)
     }
 
     func testDisabledDoesNothing() async {

@@ -4,12 +4,14 @@ import Observation
 
 /// Keeps a camera's settings pinned against other apps (Zoom/Teams) overriding them.
 ///
-/// Re-applies the locked snapshot (a) on attach, (b) when Camdeck becomes active, (c) after a drift
-/// check every 15 s that reads <= 11 standard controls. Never fights in-app edits: a pending
-/// `userDidChange()` debounce suppresses all re-asserts, and zoom/pan/tilt are skipped while auto framing runs.
+/// Re-applies the locked snapshot (a) on attach, (b) when Camdeck becomes active, (c) when another app starts
+/// using the camera: `cameraStartedElsewhere()` runs two drift checks (default +2 s and +6 s, since Zoom/Teams
+/// write their own values shortly after opening the camera), each reading <= 11 standard controls. There is no
+/// timer and no polling while idle. Never fights in-app edits: a pending `userDidChange()` debounce suppresses
+/// all re-asserts, and zoom/pan/tilt are skipped while auto framing runs.
 @MainActor @Observable
 public final class SettingsLock {
-    /// Drift-prone controls read by the periodic check.
+    /// Drift-prone controls read by the drift check.
     public static let verifiedControlIDs = ["wb-auto", "wb-temp", "focus-auto", "ae-mode", "exposure",
                                             "brightness", "contrast", "saturation", "powerline"]
 
@@ -17,7 +19,7 @@ public final class SettingsLock {
         didSet {
             guard oldValue != isEnabled else { return }
             defaults.set(isEnabled, forKey: enabledKey)
-            if isEnabled { snapshot = capture(); saveSnapshot(); startTimer() } else { stopTimer(); snapshot = nil; saveSnapshot() }
+            if isEnabled { snapshot = capture(); saveSnapshot() } else { cancelEventChecks(); snapshot = nil; saveSnapshot() }
         }
     }
     public private(set) var lastReassert: Date?
@@ -29,7 +31,7 @@ public final class SettingsLock {
     @ObservationIgnored private let snapshotKey: String
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let debounce: Duration
-    @ObservationIgnored private let checkInterval: Duration
+    @ObservationIgnored private let eventDelays: [Duration]
     @ObservationIgnored private let minCheckGap: TimeInterval
     @ObservationIgnored private let capture: () -> CameraSettings
     @ObservationIgnored private let applySettings: (CameraSettings) -> Int
@@ -39,7 +41,7 @@ public final class SettingsLock {
     @ObservationIgnored public var isAutoFramingActive: () -> Bool
     @ObservationIgnored private var lastCheck: Date?
     @ObservationIgnored private var debounceTask: Task<Void, Never>?
-    @ObservationIgnored private var timer: Task<Void, Never>?
+    @ObservationIgnored private var eventChecks: Task<Void, Never>?
     @ObservationIgnored private nonisolated(unsafe) var observer: NSObjectProtocol?
 
     /// - capture: current settings (CameraController.captureSettings).
@@ -47,12 +49,12 @@ public final class SettingsLock {
     /// - read: reads the given standard control ids from the device (one USB request each); missing = unreadable.
     /// - write: writes one standard control through the throttled setter (CameraController.set).
     public init(uniqueID: String, defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init,
-                debounce: Duration = .seconds(1), checkInterval: Duration = .seconds(15), minCheckGap: TimeInterval = 10,
+                debounce: Duration = .seconds(1), eventDelays: [Duration] = [.seconds(2), .seconds(6)], minCheckGap: TimeInterval = 10,
                 observeAppActivation: Bool = true,
                 capture: @escaping () -> CameraSettings, apply: @escaping (CameraSettings) -> Int,
                 read: @escaping ([String]) async -> [String: [Int]], write: @escaping (String, [Int]) -> Void,
                 isAutoFramingActive: @escaping () -> Bool = { false }) {
-        self.defaults = defaults; self.now = now; self.debounce = debounce; self.checkInterval = checkInterval
+        self.defaults = defaults; self.now = now; self.debounce = debounce; self.eventDelays = eventDelays
         self.minCheckGap = minCheckGap; self.capture = capture; self.applySettings = apply; self.read = read
         self.write = write; self.isAutoFramingActive = isAutoFramingActive
         enabledKey = "settingsLock.enabled.\(uniqueID)"
@@ -64,12 +66,11 @@ public final class SettingsLock {
                 Task { @MainActor in await self?.appDidBecomeActive() }
             }
         }
-        if isEnabled { startTimer() }
     }
 
     deinit {
         if let observer { NotificationCenter.default.removeObserver(observer) }
-        timer?.cancel(); debounceTask?.cancel()
+        eventChecks?.cancel(); debounceTask?.cancel()
     }
 
     // MARK: Hooks
@@ -84,6 +85,7 @@ public final class SettingsLock {
     /// Call whenever the user changes a control in Camdeck. Recaptures after the debounce.
     public func userDidChange() {
         guard isEnabled else { return }
+        cancelEventChecks()
         debounceTask?.cancel()
         debounceTask = Task { [weak self, debounce] in
             try? await Task.sleep(for: debounce)
@@ -105,12 +107,34 @@ public final class SettingsLock {
         record(n)
     }
 
-    /// (c) Periodic drift check: reads <= 11 controls, rewrites only the drifted ones. Safe to call often;
+    /// (c) Another app started using the camera: schedules drift checks at each `eventDelays` offset from now
+    /// (default +2 s, +6 s). They bypass `minCheckGap`. A newer start event replaces the pending ones; they are
+    /// also cancelled on disable and `userDidChange()`.
+    public func cameraStartedElsewhere() {
+        guard isEnabled else { return }
+        eventChecks?.cancel()
+        let delays = eventDelays
+        eventChecks = Task { [weak self] in
+            let clock = ContinuousClock()
+            let start = clock.now
+            for d in delays {
+                try? await clock.sleep(until: start + d)
+                guard !Task.isCancelled, let self else { return }
+                await self.verify(force: true)
+                guard !Task.isCancelled else { return }
+            }
+        }
+    }
+
+    /// Drift check: reads <= 11 controls, rewrites only the drifted ones. Safe to call often;
     /// calls closer than `minCheckGap` are ignored.
-    public func verify() async {
+    public func verify() async { await verify(force: false) }
+
+    /// `force` skips the `minCheckGap` throttle (used by the camera-start checks).
+    func verify(force: Bool) async {
         guard isEnabled, let s = snapshot, debounceTask == nil else { return }
         let t = now()
-        if let last = lastCheck, t.timeIntervalSince(last) < minCheckGap { return }
+        if !force, let last = lastCheck, t.timeIntervalSince(last) < minCheckGap { return }
         lastCheck = t
         let ids = readableIDs(s, only: Self.verifiedControlIDs + (isAutoFramingActive() ? [] : ["zoom", "pantilt"]))
         record(await fixDrift(s, ids: ids))
@@ -160,16 +184,5 @@ public final class SettingsLock {
         else { defaults.removeObject(forKey: snapshotKey) }
     }
 
-    private func startTimer() {
-        timer?.cancel()
-        timer = Task { [weak self, checkInterval] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: checkInterval)
-                guard !Task.isCancelled else { return }
-                await self?.verify()
-            }
-        }
-    }
-
-    private func stopTimer() { timer?.cancel(); timer = nil }
+    private func cancelEventChecks() { eventChecks?.cancel(); eventChecks = nil }
 }
