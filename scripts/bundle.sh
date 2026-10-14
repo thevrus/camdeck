@@ -26,7 +26,7 @@ xcrun actool scripts/Camdeck.icon --compile "$APP/Contents/Resources" --app-icon
 appintents() {
     local obj="$(dirname "$BIN")/../../out/Intermediates.noindex/Camdeck.build/Release/Camdeck-p.build/Objects-normal/arm64"
     [ -d "$obj" ] || obj="$(dirname "$(find .build -path '*Release/Camdeck-p.build*' -name Camdeck-primary.swiftconstvalues | head -1)")"
-    [ -f "$obj/Camdeck.SwiftFileList" ] || return 1
+    [ -f "$obj/Camdeck.SwiftFileList" ] || { echo "appintents: no Camdeck.SwiftFileList in '$obj'" >&2; return 1; }
     local lists; lists="$(mktemp -d)"
     cp "$obj/Camdeck.SwiftFileList" "$lists/src.txt"
     echo "$obj/Camdeck-primary.swiftconstvalues" > "$lists/const.txt"
@@ -39,7 +39,15 @@ appintents() {
     rm -rf "$lists"
     [ -f "$APP/Contents/Resources/Metadata.appintents/extract.actionsdata" ]
 }
-appintents || { echo "warning: App Intents metadata not generated; Shortcuts actions will be missing" >&2; [ -z "${CI:-}" ] || exit 1; }
+appintents || {
+    echo "warning: App Intents metadata not generated; Shortcuts actions will be missing" >&2
+    if [ -n "${CI:-}" ]; then
+        # Enough to see what this toolchain wrote instead of the expected layout.
+        swift --version >&2; ls -d /Applications/Xcode* >&2
+        find .build \( -name '*.SwiftFileList' -o -name '*.swiftconstvalues' \) -path '*Camdeck*' | head -20 >&2
+        exit 1
+    fi
+}
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
