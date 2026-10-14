@@ -65,7 +65,7 @@
   "mainEntity": [
    {
     "@type": "Question",
-    "name": "For tinkerers: control Camdeck with links</summary>\n        <ul class=\"urls\">\n          <li><code>camdeck://preset/Meeting</code><span>Apply a preset by name, or by number: <code>preset/2</code></span></li>\n          <li><code>camdeck://reset-view</code><span>Center the view and zoom out</span></li>\n          <li><code>camdeck://reset-image</code><span>Picture and light back to defaults</span></li>\n          <li><code>camdeck://reset</code><span>Reset everything. Presets are kept</span></li>\n          <li><code>camdeck://lock/on</code><span>Turn Keep These Settings on. <code>lock/off</code> turns it off</span></li>\n          <li><code>camdeck://camera/Name</code><span>Switch to a camera by name</span></li>\n        </ul>\n        <div class=\"cmd\">\n          <code>open -g \"camdeck://preset/Meeting\"</code>\n          <button class=\"cp\" type=\"button\" data-copy='open -g \"camdeck://preset/Meeting\"' aria-label=\"Copy the Terminal command\">Copy</button>\n        </div>\n      </details>\n    </div>\n  </div>\n</section>\n\n<div class=\"get\" id=\"get\">\n  <section class=\"get-in\" aria-labelledby=\"get-h\">\n    <img class=\"icon\" src=\"icon.png\" alt=\"\" width=\"104\" height=\"104\">\n    <h2 id=\"get-h\">Get Camdeck</h2>\n    <p class=\"sub\">Free and open source. Needs a Mac with Apple silicon on macOS 26 Tahoe. Updates install themselves.</p>\n    <div class=\"actions\">\n      <a class=\"btn\" href=\"https://github.com/thevrus/camdeck/releases/latest/download/Camdeck.dmg\">\n        <svg viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M12.6 8.5c0-1.5.8-2.5 2.1-3.3-.8-1.1-1.9-1.7-3.2-1.8-1.3-.1-2.6.8-3.2.8-.7 0-1.7-.8-2.8-.7-1.4 0-2.7.8-3.5 2.1-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.1 1.1 0 1.5-.7 2.8-.7s1.7.7 2.8.7c1.2 0 1.9-1 2.6-2.1.5-.7.9-1.5 1.1-2.3-1.5-.6-2.5-1.9-2.5-3.4zM10.5 2.2c.6-.7 1-1.7.9-2.7-.9 0-2 .6-2.6 1.3-.6.7-1 1.6-.9 2.6 1 .1 2-.5 2.6-1.2z\"/></svg>\n        Download for Mac\n      </a>\n      <a class=\"link\" href=\"https://github.com/thevrus/camdeck/releases\">All releases</a>\n    </div>\n    <ol class=\"steps\">\n      <li><h3>Move it to Applications</h3><p>Open the DMG and drag Camdeck onto the Applications folder.</p></li>\n      <li><h3>Allow it once</h3><p>If macOS says it could not verify Camdeck, open System Settings, Privacy & Security, and click Open Anyway. You do this once.</p></li>\n      <li><h3>Pick your camera</h3><p>Allow camera access when asked. Your webcam appears in the list and the preview starts.</p></li>\n    </ol>\n    <!-- Homebrew: enable once thevrus/homebrew-tap exists.\n    <div class=\"cmd\" style=\"margin-inline:auto\">\n      <code id=\"brew\">brew install --cask thevrus/tap/camdeck</code>\n      <button class=\"cp\" type=\"button\" data-copy=\"brew install --cask thevrus/tap/camdeck\" aria-label=\"Copy the Homebrew command\">Copy</button>\n    </div>\n    -->\n  </section>\n</div>\n\n<section id=\"faq\">\n  <div class=\"wrap faq\">\n    <h2>Camdeck FAQ</h2>\n    <div class=\"qs\">\n      <details name=\"faq\" open>\n        <summary>How do I change my webcam's brightness on a Mac?",
+    "name": "How do I change my webcam's brightness on a Mac?",
     "acceptedAnswer": {
      "@type": "Answer",
      "text": "macOS has no brightness, contrast or focus controls for USB webcams. Camdeck adds them: pick your camera, move a slider, and the camera keeps the new setting for every app."
@@ -217,14 +217,13 @@ h2 { font-size: clamp(2rem, 4.2vw, 3.25rem); line-height: 1.06; }
 .link:hover { color: var(--ink); background: var(--card); }
 .link:active { background: var(--island); }
 .link svg { width: 0.9rem; height: 0.9rem; }
-.actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.75rem; }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.75rem; margin-top: 2rem; }
 
 /* ---------- hero ---------- */
 .hero { padding-top: clamp(7rem, 16vh, 10rem); text-align: center; }
 .hero h1 { font-size: clamp(2.75rem, 7.2vw, 4.875rem); line-height: 1.02; letter-spacing: -0.035em; max-width: 24ch; margin-inline: auto; }
 .hero h1 span { display: block; color: var(--ink-2); }
 .hero .lede { margin: 1.5rem auto 0; max-width: 34rem; font-size: clamp(1.0625rem, 1.5vw, 1.25rem); line-height: 1.6; color: var(--ink-2); text-wrap: pretty; }
-.hero .actions { margin-top: 2rem; }
 .fine { margin-top: 1.25rem; font-size: 0.875rem; color: var(--ink-3); }
 
 /* ---------- the inspector (working) ---------- */
@@ -234,7 +233,7 @@ h2 { font-size: clamp(2rem, 4.2vw, 3.25rem); line-height: 1.06; }
   box-shadow: 0 0 0 1px rgba(255,255,255,0.07), 0 1px 0 rgba(255,255,255,0.08) inset, 0 24px 48px -36px rgba(26,24,22,0.6);
   font-size: 0.9375rem; overflow: hidden;
 }
-.insp-top { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.07); }
+.insp-top { padding: 0.9rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.07); }
 .insp-top .t { font-weight: 600; }
 .insp-body { display: grid; }
 @media (min-width: 48rem) { .insp-body { grid-template-columns: 1fr 1fr; } .insp-body > .col + .col { border-left: 1px solid rgba(255,255,255,0.07); } }
@@ -341,7 +340,6 @@ input[type=range] { width: 100%; margin: 0; height: 1.5rem; accent-color: var(--
 .get-in { background: var(--island); border-radius: 2rem; padding: clamp(3rem, 7vw, 6rem) clamp(1.25rem, 5vw, 4rem); text-align: center; }
 .get-in .icon { width: 6.5rem; height: 6.5rem; margin: 0 auto 2rem; }
 .get-in .sub { margin-inline: auto; }
-.get-in .actions { margin-top: 2rem; }
 .steps { display: grid; gap: 2rem; margin: clamp(3rem, 7vw, 5rem) auto 0; padding: 0; max-width: 60rem; text-align: left; counter-reset: s; }
 @media (min-width: 50rem) { .steps { grid-template-columns: repeat(3, 1fr); gap: 3rem; } }
 .steps li { list-style: none; counter-increment: s; padding-top: 1rem; border-top: 1px solid rgba(26,24,22,0.14); }
@@ -378,6 +376,10 @@ footer .c { text-align: center; }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-apple" viewBox="0 0 16 16"><path fill="currentColor" d="M12.6 8.5c0-1.5.8-2.5 2.1-3.3-.8-1.1-1.9-1.7-3.2-1.8-1.3-.1-2.6.8-3.2.8-.7 0-1.7-.8-2.8-.7-1.4 0-2.7.8-3.5 2.1-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.1 1.1 0 1.5-.7 2.8-.7s1.7.7 2.8.7c1.2 0 1.9-1 2.6-2.1.5-.7.9-1.5 1.1-2.3-1.5-.6-2.5-1.9-2.5-3.4zM10.5 2.2c.6-.7 1-1.7.9-2.7-.9 0-2 .6-2.6 1.3-.6.7-1 1.6-.9 2.6 1 .1 2-.5 2.6-1.2z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+</svg>
 
 <div class="nav-wrap">
   <nav class="nav" aria-label="Main">
@@ -389,7 +391,7 @@ footer .c { text-align: center; }
       <a href="#faq">FAQ</a>
     </div>
     <a class="btn" href="https://github.com/thevrus/camdeck/releases/latest/download/Camdeck.dmg">
-      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M12.6 8.5c0-1.5.8-2.5 2.1-3.3-.8-1.1-1.9-1.7-3.2-1.8-1.3-.1-2.6.8-3.2.8-.7 0-1.7-.8-2.8-.7-1.4 0-2.7.8-3.5 2.1-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.1 1.1 0 1.5-.7 2.8-.7s1.7.7 2.8.7c1.2 0 1.9-1 2.6-2.1.5-.7.9-1.5 1.1-2.3-1.5-.6-2.5-1.9-2.5-3.4zM10.5 2.2c.6-.7 1-1.7.9-2.7-.9 0-2 .6-2.6 1.3-.6.7-1 1.6-.9 2.6 1 .1 2-.5 2.6-1.2z"/></svg>
+      <svg aria-hidden="true"><use href="#i-apple"/></svg>
       Download
     </a>
   </nav>
@@ -401,7 +403,7 @@ footer .c { text-align: center; }
   <p class="lede">Camdeck is a free Mac app for adjusting a USB webcam: brightness, color, zoom and focus. It changes the camera's own settings, so Zoom, Meet, Teams and FaceTime all get the same picture.</p>
   <div class="actions">
     <a class="btn" href="https://github.com/thevrus/camdeck/releases/latest/download/Camdeck.dmg">
-      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M12.6 8.5c0-1.5.8-2.5 2.1-3.3-.8-1.1-1.9-1.7-3.2-1.8-1.3-.1-2.6.8-3.2.8-.7 0-1.7-.8-2.8-.7-1.4 0-2.7.8-3.5 2.1-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.1 1.1 0 1.5-.7 2.8-.7s1.7.7 2.8.7c1.2 0 1.9-1 2.6-2.1.5-.7.9-1.5 1.1-2.3-1.5-.6-2.5-1.9-2.5-3.4zM10.5 2.2c.6-.7 1-1.7.9-2.7-.9 0-2 .6-2.6 1.3-.6.7-1 1.6-.9 2.6 1 .1 2-.5 2.6-1.2z"/></svg>
+      <svg aria-hidden="true"><use href="#i-apple"/></svg>
       Download for Mac
     </a>
     <a class="link" href="#what">What it does <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
@@ -437,13 +439,13 @@ footer .c { text-align: center; }
       <button class="reset" type="button" id="reset">Reset All</button>
     </div>
   </div>
-  <p class="hint">These are the real Camdeck controls, so go ahead. In the app, every change lands on the camera itself, so you set it once and forget it.</p>
+  <p class="hint">Go ahead and drag them, they work. In the app, each change is saved on the camera, which is why you only do this once.</p>
 </section>
 
 <div class="dark-s">
   <section class="dark-in" id="demo" aria-labelledby="demo-h">
-    <h2 id="demo-h">One setting. Every app.</h2>
-    <p class="sub">Camdeck changes settings inside the webcam, not the video stream. Set brightness to 12 here and Zoom, Google Meet, Microsoft Teams and OBS all read 12 from the same camera.</p>
+    <h2 id="demo-h">Change it here, see it in Zoom.</h2>
+    <p class="sub">Camdeck changes the settings inside the webcam. Set brightness to 12 here and Zoom, Google Meet, Microsoft Teams and OBS all read 12 from the same camera.</p>
     <div class="chain">
       <div class="src">
         <label for="bright">Brightness <output class="num" id="o-main" for="bright">12</output></label>
@@ -464,7 +466,7 @@ footer .c { text-align: center; }
   <div class="wrap two">
     <h2>What Camdeck does</h2>
     <div>
-      <p class="lead">Camdeck gives your Mac the webcam settings that macOS leaves out. Each control changes the camera itself, so the result shows up in every app that uses it.</p>
+      <p class="lead">Camdeck gives your Mac the webcam settings that macOS leaves out. I built it for my own Insta360 Link 2C and kept adding whatever I missed on calls.</p>
       <ul class="feat">
         <li><b>Live preview</b><span>See yourself as others will, mirrored if you like.</span></li>
         <li><b>Picture controls</b><span>Brightness, contrast, color, sharpness, focus and flicker.</span></li>
@@ -474,7 +476,7 @@ footer .c { text-align: center; }
         <li><b>Glare warning</b><span>Shows where a bright window or lamp washes you out.</span></li>
         <li><b>Presets</b><span>Store your settings and bring them back in one click.</span></li>
         <li><b>Per-app presets</b><span>Apply a preset when a chosen app opens the camera.</span></li>
-        <li><b>Describe a look</b><span>Type "warmer" or "zoom in a bit" and Apple Intelligence sets the controls, on your Mac.</span></li>
+        <li><b>Describe a look</b><span>Type "warmer" or "zoom in a bit" and Apple Intelligence moves the sliders. It runs on your Mac.</span></li>
         <li><b>Mac video effects</b><span>Portrait, Studio Light and Background, from Apple.</span></li>
               </ul>
       <p class="not"><b>What it leaves out:</b> backgrounds, filters, overlays and recording. Your picture stays exactly as the camera sees it, and Camdeck stays light.</p>
@@ -506,13 +508,13 @@ footer .c { text-align: center; }
       <p class="lead">Camdeck works with almost any USB webcam for brightness, color, light, zoom and focus, including the Logitech Brio and C920, Elgato Facecam, Razer Kiyo and Anker PowerConf. The cameras below get extra controls.</p>
       <div class="cams">
         <ul>
-          <li><b>Insta360 Link 2C</b><span class="ok">Fully tested. Adds digital pan and tilt, HDR and shutter speed.</span></li>
+          <li><b>Insta360 Link 2C</b><span class="ok">The one I use every day. Adds digital pan and tilt, HDR and shutter speed.</span></li>
           <li><b>Insta360 Link 2, Link</b><span>Should work, not tested yet.</span></li>
           <li><b>AnkerWork C310, PowerConf C200</b><span>Early support.</span></li>
           <li><b>OBSBOT Tiny 2, Tiny SE, Meet</b><span>Planned.</span></li>
           <li><b>Opal Tadpole, C1</b><span>Planned.</span></li>
         </ul>
-        <p class="note">Own a camera that is not listed? <a href="https://github.com/thevrus/camdeck/issues">Open an issue</a> and we will look at adding it.</p>
+        <p class="note">Own a camera that is not listed? <a href="https://github.com/thevrus/camdeck/issues">Open an issue</a> and I will look at adding it.</p>
       </div>
     </div>
   </div>
@@ -543,7 +545,7 @@ footer .c { text-align: center; }
   <div class="wrap two">
     <h2>Shortcuts</h2>
     <div>
-      <p class="lead">Camdeck presets switch from a keyboard shortcut in any app, even with the Camdeck window closed. Apple's Shortcuts app gets three Camdeck actions, Apply Preset, Reset View and Reset Image, so you can build them into your own automations.</p>
+      <p class="lead">Camdeck presets switch from a keyboard shortcut in any app, even with the Camdeck window closed. Apple's Shortcuts app gets three Camdeck actions, Apply Preset, Reset View and Reset Image, so you can drop them into your own automations.</p>
       <details class="power">
         <summary>For tinkerers: control Camdeck with links</summary>
         <ul class="urls">
@@ -570,7 +572,7 @@ footer .c { text-align: center; }
     <p class="sub">Free and open source. Needs a Mac with Apple silicon on macOS 26 Tahoe. Updates install themselves.</p>
     <div class="actions">
       <a class="btn" href="https://github.com/thevrus/camdeck/releases/latest/download/Camdeck.dmg">
-        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M12.6 8.5c0-1.5.8-2.5 2.1-3.3-.8-1.1-1.9-1.7-3.2-1.8-1.3-.1-2.6.8-3.2.8-.7 0-1.7-.8-2.8-.7-1.4 0-2.7.8-3.5 2.1-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.1 1.1 0 1.5-.7 2.8-.7s1.7.7 2.8.7c1.2 0 1.9-1 2.6-2.1.5-.7.9-1.5 1.1-2.3-1.5-.6-2.5-1.9-2.5-3.4zM10.5 2.2c.6-.7 1-1.7.9-2.7-.9 0-2 .6-2.6 1.3-.6.7-1 1.6-.9 2.6 1 .1 2-.5 2.6-1.2z"/></svg>
+        <svg aria-hidden="true"><use href="#i-apple"/></svg>
         Download for Mac
       </a>
       <a class="link" href="https://github.com/thevrus/camdeck/releases">All releases</a>
@@ -594,43 +596,43 @@ footer .c { text-align: center; }
     <h2>Camdeck FAQ</h2>
     <div class="qs">
       <details name="faq" open>
-        <summary>How do I change my webcam's brightness on a Mac?<span class="pm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></span></summary>
+        <summary>How do I change my webcam's brightness on a Mac?<span class="pm"><svg aria-hidden="true"><use href="#i-plus"/></svg></span></summary>
         <div class="a">macOS has no brightness, contrast or focus controls for USB webcams. Camdeck adds them: pick your camera, move a slider, and the camera keeps the new setting for every app.</div>
       </details>
       <details name="faq">
-        <summary>Do I need to pick a new camera in Zoom?<span class="pm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></span></summary>
+        <summary>Do I need to pick a new camera in Zoom?<span class="pm"><svg aria-hidden="true"><use href="#i-plus"/></svg></span></summary>
         <div class="a">No. Camdeck adjusts the camera you already use, so Zoom and every other app keep using it as before. There is nothing to switch and no added delay.</div>
       </details>
       <details name="faq">
-        <summary>Does Camdeck work with my Logitech webcam?<span class="pm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></span></summary>
+        <summary>Does Camdeck work with my Logitech webcam?<span class="pm"><svg aria-hidden="true"><use href="#i-plus"/></svg></span></summary>
         <div class="a">Most likely. Camdeck handles brightness, color, light, zoom and focus on nearly any USB webcam, including the Logitech Brio and C920. Insta360 cameras get extras such as pan and tilt.</div>
       </details>
       <details name="faq">
-        <summary>Can I adjust my webcam by describing what I want?<span class="pm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></span></summary>
+        <summary>Can I adjust my webcam by describing what I want?<span class="pm"><svg aria-hidden="true"><use href="#i-plus"/></svg></span></summary>
         <div class="a">Yes. In Camdeck, press ⌘L and type something like "warmer", "zoom in" or "black and white". Apple Intelligence works out the settings on your Mac, so the request never leaves it. This needs a Mac with Apple Intelligence turned on.</div>
       </details>
       <details name="faq">
-        <summary>Will my settings survive a reboot?<span class="pm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></span></summary>
+        <summary>Will my settings survive a reboot?<span class="pm"><svg aria-hidden="true"><use href="#i-plus"/></svg></span></summary>
         <div class="a">Most cameras keep their settings on the device. For the ones that do not, mark a preset Apply at Launch, or turn on Keep These Settings and Camdeck restores them whenever an app opens the camera.</div>
       </details>
       <details name="faq">
-        <summary>Is Camdeck free?<span class="pm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></span></summary>
+        <summary>Is Camdeck free?<span class="pm"><svg aria-hidden="true"><use href="#i-plus"/></svg></span></summary>
         <div class="a">Yes. Camdeck is free and open source under the MIT license. There is no account, no ads and nothing to buy.</div>
       </details>
       <details name="faq">
-        <summary>Which Macs does Camdeck run on?<span class="pm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></span></summary>
+        <summary>Which Macs does Camdeck run on?<span class="pm"><svg aria-hidden="true"><use href="#i-plus"/></svg></span></summary>
         <div class="a">Camdeck needs a Mac with Apple silicon (M1 or later) running macOS 26 Tahoe. Intel Macs are not supported.</div>
       </details>
       <details name="faq">
-        <summary>Does Camdeck collect anything?<span class="pm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></span></summary>
+        <summary>Does Camdeck collect anything?<span class="pm"><svg aria-hidden="true"><use href="#i-plus"/></svg></span></summary>
         <div class="a">No. Camdeck has no account and no tracking. It only goes online to check GitHub for updates.</div>
       </details>
       <details name="faq">
-        <summary>Can I uninstall the maker's app?<span class="pm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></span></summary>
+        <summary>Can I uninstall the maker's app?<span class="pm"><svg aria-hidden="true"><use href="#i-plus"/></svg></span></summary>
         <div class="a">Usually, yes. Insta360, OBSBOT and Opal each ship a control app for their own cameras. Camdeck covers the same controls for supported cameras, plus the basics for every other webcam.</div>
       </details>
       <details name="faq">
-        <summary>How do I remove Camdeck?<span class="pm"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></span></summary>
+        <summary>How do I remove Camdeck?<span class="pm"><svg aria-hidden="true"><use href="#i-plus"/></svg></span></summary>
         <div class="a">Quit Camdeck and drag it to the Trash. It installs no drivers or helpers, so there is nothing else to clean up.</div>
       </details>
     </div>
@@ -667,12 +669,9 @@ footer .c { text-align: center; }
   });
   function setToggle(t, on, quiet) {
     t.setAttribute("aria-checked", String(on));
-    (t.dataset.gates || "").split(" ").forEach(function (id) {
-      if (!id) return;
-      var r = document.getElementById(id);
-      r.parentNode.classList.toggle("off", on);
-      r.tabIndex = on ? -1 : 0;
-    });
+    var r = document.getElementById(t.dataset.gates);
+    r.parentNode.classList.toggle("off", on);
+    r.tabIndex = on ? -1 : 0;
     if (!quiet) wrote(document.getElementById(t.getAttribute("aria-labelledby")).textContent.toLowerCase(), on ? "on" : "off");
   }
   var toggles = insp.querySelectorAll(".toggle");
