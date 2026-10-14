@@ -22,8 +22,6 @@ struct InspectorView: View {
     @State private var newName = ""
     @State private var renaming: Preset?
     @State private var renameText = ""
-    @State private var lookText = ""
-    @State private var lookBusy = false
     private var effects: VideoEffects { .shared }
 
     /// Everyday look controls. Everything else lives in Color & Exposure or Advanced.
@@ -422,41 +420,6 @@ struct InspectorView: View {
         if showAll, hasViewControls {
             Button("Reset View") { cam.resetView() }
                 .help("Return zoom and framing to the full field of view.")
-        }
-    }
-
-    // MARK: Describe a look
-
-    /// Free text -> on-device model -> control writes. Enter applies; Undo restores the previous image.
-    private var lookRow: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                TextField("Describe a look, e.g. warmer, black and white", text: $lookText)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit(submitLook)
-                    .disabled(lookBusy)
-                    .accessibilityLabel("Describe a look")
-                if lookBusy {
-                    ProgressView().controlSize(.small)
-                } else if cam.lookUndo != nil {
-                    Button("Undo") { cam.undoLook() }.buttonStyle(.link).font(.subheadline)
-                }
-            }
-            if let why = LookAssistant.unavailableReason {
-                footnote(why)
-            }
-        }
-        .help("Type what you want the picture to look like and press Return. Runs on this Mac; nothing is sent anywhere.")
-    }
-
-    private func submitLook() {
-        let text = lookText
-        guard !text.trimmingCharacters(in: .whitespaces).isEmpty, !lookBusy else { return }
-        lookBusy = true
-        Task {
-            await cam.applyLook(text)
-            lookBusy = false
-            lookText = ""
         }
     }
 

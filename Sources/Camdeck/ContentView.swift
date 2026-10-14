@@ -13,6 +13,8 @@ struct ContentView: View {
             .inspector(isPresented: $showInspector) { InspectorView(cam: cam) }
             .inspectorColumnWidth(min: 320, ideal: 380, max: 600)
             .toolbar {
+                ToolbarItem(placement: .primaryAction) { LookField(cam: cam) }
+                ToolbarSpacer(.fixed, placement: .primaryAction)
                 ToolbarItemGroup(placement: .primaryAction) {
                     cameraMenu
                     Toggle(isOn: $cam.mirrored) {
