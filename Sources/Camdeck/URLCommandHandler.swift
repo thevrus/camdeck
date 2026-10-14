@@ -42,9 +42,6 @@ final class URLCommandHandler {
         case .resetImage:
             guard await waitForCamera(cam) else { return fail(cam, "No camera available") }
             cam.resetImage()
-        case .fix:
-            guard await waitForCamera(cam), cam.hasUVC else { return fail(cam, "No camera available") }
-            await cam.fixPicture()
         case .reset:
             guard await waitForCamera(cam) else { return fail(cam, "No camera available") }
             cam.restoreDefaults()

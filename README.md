@@ -34,7 +34,6 @@ Camdeck answers to `camdeck://` links, so Shortcuts ("Open URL"), Raycast and th
 - `camdeck://reset-view`: center the view and zoom out
 - `camdeck://reset-image`: put brightness, color and exposure back to defaults (zoom and framing stay)
 - `camdeck://reset`: reset all settings (presets are kept)
-- `camdeck://fix`: Fix My Picture. Sets exposure, white balance, focus and anti-flicker from your face in a few seconds, then stops
 - `camdeck://lock/on` and `camdeck://lock/off`: turn "Keep These Settings" on or off
 - `camdeck://camera/Name`: switch to a camera by name or ID
 

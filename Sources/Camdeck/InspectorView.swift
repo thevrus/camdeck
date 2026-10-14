@@ -49,14 +49,6 @@ struct InspectorView: View {
             }
             if hasAny(Self.exposureIDs) {
                 fold("Color & Exposure", $exposureOpen, reset: { cam.resetImage() }) {
-                    Button { Task { await cam.fixPicture() } } label: {
-                        Label(cam.fixing ? "Fixing…" : "Fix My Picture", systemImage: "wand.and.stars")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(cam.fixing || !cam.hasUVC)
-                    .help("Sets exposure, white balance, focus and anti-flicker from your face, then stops. Takes a few seconds.")
                     imageRows(Self.exposureIDs)
                     if let readout = cam.autoReadout {
                         Text(readout).font(.callout).foregroundStyle(.secondary).monospacedDigit()

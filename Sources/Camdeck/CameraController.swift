@@ -137,7 +137,7 @@ final class CameraController {
         autoReadout = text
     }
 
-    func readStandard(_ ids: [String]) async -> [String: [Int]] {
+    private func readStandard(_ ids: [String]) async -> [String: [Int]] {
         guard let dev = uvc else { return [:] }
         let controls = controlsByID
         let wanted = ids.compactMap { id in controls[id].map { (id, $0) } }
@@ -305,9 +305,7 @@ final class CameraController {
     /// True while the main window shows the preview. The capture session runs only while it is visible or auto
     /// framing needs frames, so a closed window leaves the camera off and other apps' camera use is detectable.
     var previewVisible = false { didSet { if oldValue != previewVisible { updateSessionRunning() } } }
-    /// True while "Fix My Picture" runs (PictureFixer.swift); keeps the session up for its few seconds.
-    var fixing = false { didSet { if oldValue != fixing { updateSessionRunning() } } }
-    private var wantsSession: Bool { previewVisible || autoFraming != .off || fixing }
+    private var wantsSession: Bool { previewVisible || autoFraming != .off }
 
     private func updateSessionRunning() {
         let session = self.session, run = wantsSession && currentDevice != nil
@@ -340,7 +338,7 @@ final class CameraController {
     private(set) var isSubjectDetected = false
     /// Subject box, normalized, top-left origin, in preview coordinates (mirrored when `mirrored`).
     private(set) var subjectBox: CGRect?
-    @ObservationIgnored let framer = AutoFramer()
+    @ObservationIgnored private let framer = AutoFramer()
     @ObservationIgnored private var framerAttached = false
     @ObservationIgnored private var lastAutoWrite = Date.distantPast
 
@@ -348,7 +346,7 @@ final class CameraController {
     @ObservationIgnored private var uvc: UVCDevice?
     @ObservationIgnored private var monitor: UVCHotplugMonitor?
     @ObservationIgnored private let io = DispatchQueue(label: "app.camdeck.uvc")
-    @ObservationIgnored let sessionQueue = DispatchQueue(label: "app.camdeck.session")
+    @ObservationIgnored private let sessionQueue = DispatchQueue(label: "app.camdeck.session")
     @ObservationIgnored private var pending: [String: [Int]] = [:]
     @ObservationIgnored private var pendingVendor: [String: Int] = [:]
     @ObservationIgnored private var rereads: [String: Task<Void, Never>] = [:]

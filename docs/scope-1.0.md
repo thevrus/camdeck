@@ -20,10 +20,7 @@ Camdeck sets up your webcam and gets out of the way. No virtual camera, no video
 - Link 2C modes via XU, gesture toggle
 - Framing controls; face detection runs on demand only, never always-on
 
-**One-shot fixes** (analyze one frame, write values, stop; zero idle cost)
-- "Fix my picture": face-metered exposure, white balance, backlight compensation
-- Focus lock on face
-- Flicker detect (50/60 Hz)
+**Presets and zebra**
 - Looks = saved presets, not live analysis
 - Zebra in the preview (the only preview overlay)
 
@@ -45,6 +42,7 @@ Camdeck sets up your webcam and gets out of the way. No virtual camera, no video
 | Histogram/waveform, before/after, framing guides | Preview chrome |
 | Deeper Apple video effects | Thin wrapper on Apple's own UI |
 | Firmware updater | Bricking risk; vendor's job |
+| "Fix my picture" (face-metered exposure/WB/backlight, focus lock, flicker detect) | Dropped: one-shot auto-tuning gave poor results on real cameras |
 | Preset marketplace, calendar triggers, sync | Services, not camera control |
 
 ## Two wording constraints

@@ -45,17 +45,6 @@ struct ResetImageIntent: AppIntent {
     }
 }
 
-struct FixPictureIntent: AppIntent {
-    static let title: LocalizedStringResource = "Fix Camdeck Picture"
-    static let description = IntentDescription("Runs Camdeck's one-shot picture fix.")
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        send("camdeck://fix")
-        return .result()
-    }
-}
-
 struct CamdeckShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: ApplyPresetIntent(), phrases: ["Apply a preset in \(.applicationName)"],
@@ -64,7 +53,5 @@ struct CamdeckShortcuts: AppShortcutsProvider {
                     shortTitle: "Reset View", systemImageName: "arrow.counterclockwise")
         AppShortcut(intent: ResetImageIntent(), phrases: ["Reset the image in \(.applicationName)"],
                     shortTitle: "Reset Image", systemImageName: "photo")
-        AppShortcut(intent: FixPictureIntent(), phrases: ["Fix the picture in \(.applicationName)"],
-                    shortTitle: "Fix Picture", systemImageName: "wand.and.stars")
     }
 }
