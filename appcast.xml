@@ -3,6 +3,14 @@
     <channel>
         <title>Camdeck</title>
         <item>
+            <title>0.2.0</title>
+            <pubDate>Wed, 14 Oct 2026 18:53:15 +0000</pubDate>
+            <sparkle:version>49</sparkle:version>
+            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/thevrus/camdeck/releases/download/v0.2.0/Camdeck-0.2.0.zip" length="4699624" type="application/octet-stream" sparkle:edSignature="tVlIU71KUwsHgiZGYGFpcYz9XgX8oK0FAd4mUsfIUq+behBNTRTiV+Tzu3UyUyO0LuvKf3uKqtF8m37GOtgDBg=="/>
+        </item>
+        <item>
             <title>0.1.2</title>
             <pubDate>Tue, 13 Oct 2026 21:53:34 +0000</pubDate>
             <sparkle:version>13</sparkle:version>
