@@ -18,6 +18,7 @@ Each camera brand ships its own heavy control app, and it only works with that b
 
 - **See a live preview**, flip it like a mirror, and pick the video quality.
 - **Fix the picture**: brightness, contrast, colors, sharpness, focus and flicker.
+- **Describe a look**: type "warmer", "black and white" or "a bit brighter" and the picture changes. Uses Apple Intelligence on your Mac; nothing is sent anywhere.
 - **Control exposure**: let the camera decide, or set it yourself.
 - **Zoom and move the view** with a simple draggable pad.
 - **Auto framing**: the app follows your face and keeps you centered.

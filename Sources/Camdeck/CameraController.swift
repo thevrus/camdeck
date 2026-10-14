@@ -137,7 +137,7 @@ final class CameraController {
         autoReadout = text
     }
 
-    private func readStandard(_ ids: [String]) async -> [String: [Int]] {
+    func readStandard(_ ids: [String]) async -> [String: [Int]] {
         guard let dev = uvc else { return [:] }
         let controls = controlsByID
         let wanted = ids.compactMap { id in controls[id].map { (id, $0) } }
@@ -212,6 +212,9 @@ final class CameraController {
 
     /// Set by the menu and inspector; ContentView shows the confirmation.
     var confirmingReset = false
+
+    /// Image settings before the last "Describe a look" request; nil when there is nothing to undo.
+    var lookUndo: CameraSettings?
 
     /// Public "Reset all settings": natural format, image and exposure controls, framing and auto framing. Presets are kept.
     func restoreDefaults() {
@@ -487,7 +490,7 @@ final class CameraController {
     private func attachUVC() {
         uvc = nil; camera = nil; reframe = nil; deviceInfo = nil; usbWarning = nil; presets = nil; settingsLock = nil; stopUsageMonitor(); capabilityProviders = [:]; pendingReframe = nil
         states = []; values = [:]; vendorValues = [:]; profileControls = []; profile = .generic
-        autoReadout = nil; readoutTask?.cancel()
+        autoReadout = nil; readoutTask?.cancel(); lookUndo = nil
         pendingVendor = [:]; rereads.values.forEach { $0.cancel() }; rereads = [:]
         guard let id = selectedID, let (v, p) = Self.usbIDs(id) else { return }
         io.async { [weak self] in
@@ -597,6 +600,8 @@ final class CameraController {
         syncFramer()
     }
 
+    private static let autoFirst = ["ae-mode", "wb-auto", "focus-auto"]
+
     private func scheduleFlush() {
         guard !flushScheduled else { return }
         flushScheduled = true
@@ -614,8 +619,13 @@ final class CameraController {
         let controls = controlsByID
         let vendor = Dictionary(uniqueKeysWithValues: profileControls.map { ($0.id, $0) })
         let log = Self.log
+        // Auto toggles first: a manual value written while its auto is still on is rejected by some cameras.
+        let ordered = batch.sorted { a, b in
+            let fa = Self.autoFirst.firstIndex(of: a.key) ?? Self.autoFirst.count, fb = Self.autoFirst.firstIndex(of: b.key) ?? Self.autoFirst.count
+            return fa != fb ? fa < fb : a.key < b.key
+        }
         io.async {
-            for (id, v) in batch {
+            for (id, v) in ordered {
                 guard let c = controls[id] else { continue }
                 log.debug("write \(id, privacy: .public) = \(v.description, privacy: .public)")
                 do { try dev.write(c, v) } catch { log.error("write \(id, privacy: .public) failed: \(String(describing: error), privacy: .public)") }

@@ -5,6 +5,9 @@ import UVCKit
 
 struct InspectorView: View {
     @Bindable var cam: CameraController
+    /// Master switch: off shows the short everyday inspector, on shows every control.
+    @AppStorage("showAllControls") private var showAll = false
+    /// Open/closed state of the Advanced fold only.
     @AppStorage("advancedControls") private var advanced = false
     @AppStorage("inspector.effects") private var effectsOpen = false
     @AppStorage("inspector.framing") private var framingOpen = true
@@ -19,11 +22,18 @@ struct InspectorView: View {
     @State private var newName = ""
     @State private var renaming: Preset?
     @State private var renameText = ""
+    @State private var lookText = ""
+    @State private var lookBusy = false
     private var effects: VideoEffects { .shared }
 
     /// Everyday look controls. Everything else lives in Color & Exposure or Advanced.
     private static let basicImage = ["brightness", "contrast", "saturation", "sharpness"]
     private static let exposureIDs = ["wb-auto", "wb-temp", "ae-mode", "exposure", "powerline", "backlight", "lowlight"]
+    /// What the standard view (Show All Controls off) keeps from the two lists above.
+    private static let standardImage = ["brightness", "contrast", "saturation"]
+    private static let standardExposure = ["wb-auto", "wb-temp", "ae-mode"]
+    /// Controls hidden in the standard view besides the Advanced fold's ids.
+    private static let hiddenExtraIDs = ["sharpness", "exposure", "powerline", "backlight", "lowlight", "roll", "focus-auto", "focus"]
 
     var body: some View {
         Form {
@@ -32,7 +42,7 @@ struct InspectorView: View {
                     .font(.footnote).foregroundStyle(.secondary)
             }
             cameraSection
-            if hasViewControls || cam.centerStageSupported || cam.state("focus-auto") != nil || !vendorControls(in: "Framing").isEmpty {
+            if showFraming {
                 fold("Framing", $framingOpen) {
                     viewRows
                     if cam.state("pantilt") != nil, let z = cam.state("zoom"), let lo = z.min?.first,
@@ -41,35 +51,41 @@ struct InspectorView: View {
                     }
                 }
             }
-            if hasAny(Self.basicImage) || !vendorControls(in: "Image").isEmpty {
+            if hasAny(imageIDs) || (showAll && !vendorControls(in: "Image").isEmpty) {
                 fold("Image", $imageOpen, reset: { cam.resetImage() }) {
-                    imageRows(Self.basicImage)
-                    vendorRows(vendorControls(in: "Image"))
+                    imageRows(imageIDs)
+                    if showAll { vendorRows(vendorControls(in: "Image")) }
                 }
             }
-            if hasAny(Self.exposureIDs) {
+            if hasAny(exposureRowIDs) {
                 fold("Color & Exposure", $exposureOpen, reset: { cam.resetImage() }) {
-                    imageRows(Self.exposureIDs)
-                    if let readout = cam.autoReadout {
-                        Text(readout).font(.callout).foregroundStyle(.secondary).monospacedDigit()
+                    imageRows(exposureRowIDs)
+                    if showAll {
+                        if let readout = cam.autoReadout {
+                            Text(readout).font(.callout).foregroundStyle(.secondary).monospacedDigit()
+                        }
+                        @Bindable var zebra = cam.zebra
+                        Toggle("Show Clipping", isOn: $zebra.isEnabled)
+                            .help("Stripes over areas that are blown out to pure white, so you can lower exposure until they disappear.")
+                        footnote("Marks parts of the preview that are overexposed (pure white, detail lost) with stripes. Lower Exposure or Brightness until they vanish. Only affects the preview, not what other apps see.")
                     }
-                    @Bindable var zebra = cam.zebra
-                    Toggle("Show Clipping", isOn: $zebra.isEnabled)
-                        .help("Stripes over areas that are blown out to pure white, so you can lower exposure until they disappear.")
-                    footnote("Marks parts of the preview that are overexposed (pure white, detail lost) with stripes. Lower Exposure or Brightness until they vanish. Only affects the preview, not what other apps see.")
                 }
             }
-            if !effects.items.isEmpty { effectsSection }
+            if showAll, !effects.items.isEmpty { effectsSection }
             if let presets = cam.presets { presetsSection(presets) }
-            if hasAny(advancedIDs) || cam.state("roll") != nil {
+            if showAll, hasAny(advancedIDs) || cam.state("roll") != nil {
                 fold("Advanced", $advanced) {
                     imageRows(advancedIDs)
                     if let r = cam.state("roll") { slider(r) }
                     footnote("Rarely needed. These can easily make the image look worse.")
                 }
             }
-            vendorSections
-            if cam.currentDevice != nil { deviceSection }
+            if showAll {
+                vendorSections
+                if cam.currentDevice != nil { deviceSection }
+            } else if hasHiddenChanges {
+                hiddenChangesNote
+            }
         }
         .formStyle(.grouped)
         .onChange(of: exposureOpen) { _, open in if open { Task { await cam.refreshAutoReadout() } } }
@@ -78,6 +94,47 @@ struct InspectorView: View {
         // Opaque on purpose: the glass inspector over dark video made text unreadable.
         .scrollContentBackground(.hidden)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var imageIDs: [String] { showAll ? Self.basicImage : Self.standardImage }
+    private var exposureRowIDs: [String] { showAll ? Self.exposureIDs : Self.standardExposure }
+
+    private var showFraming: Bool {
+        let core = ["zoom", "pantilt"].contains { cam.state($0) != nil } || cam.centerStageSupported
+        guard showAll else { return core }
+        return hasViewControls || core || cam.state("focus-auto") != nil || !vendorControls(in: "Framing").isEmpty
+    }
+
+    // MARK: Hidden changes
+
+    /// True when a control the standard view hides differs from its default. Reads cached state only, never the device.
+    private var hasHiddenChanges: Bool {
+        let ids = Set(advancedIDs + Self.hiddenExtraIDs)
+        let stateChanged = cam.states.contains { st in
+            guard ids.contains(st.id), let def = st.def else { return false }
+            // Skip values the camera drives itself while the matching auto toggle is on.
+            if st.id == "exposure" && cam.autoExposureOn() { return false }
+            if st.id == "focus" && autoOn("focus-auto") { return false }
+            return def != cam.value(st.id)
+        }
+        if stateChanged { return true }
+        if cam.zebra.isEnabled { return true }
+        return cam.profileControls.contains { c in
+            guard let d = c.ui.default, let v = cam.profileValues[c.id] else { return false }
+            return abs(v - d) > 0.0001
+        }
+    }
+
+    private var hiddenChangesNote: some View {
+        Section {
+            Button { withAnimation(.snappy) { showAll = true } } label: {
+                Text("Some hidden settings are changed. Show All Controls to see them.")
+                    .font(.footnote)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.link)
+        }
     }
 
     private var advancedIDs: [String] {
@@ -126,20 +183,22 @@ struct InspectorView: View {
             Picker("Camera", selection: Binding(get: { cam.selectedID }, set: { if let id = $0 { cam.select(id) } })) {
                 ForEach(cam.cameras, id: \.uniqueID) { Text($0.localizedName).tag(Optional($0.uniqueID)) }
             }
-            Picker("Resolution", selection: Binding(get: { selectedSize }, set: { if let r = $0 { selectResolution(r) } })) {
-                ForEach(resolutions, id: \.self) { Text(resolutionLabel($0)).tag(Optional($0)) }
+            if showAll {
+                Picker("Resolution", selection: Binding(get: { selectedSize }, set: { if let r = $0 { selectResolution(r) } })) {
+                    ForEach(resolutions, id: \.self) { Text(resolutionLabel($0)).tag(Optional($0)) }
+                }
+                .disabled(cam.formats.isEmpty)
+                .help("Capture size. Higher resolutions cost more CPU and USB bandwidth.")
+                Picker("Frame Rate", selection: Binding(get: { selectedFormat?.fps }, set: { fps in
+                    if let r = selectedSize, let fps { cam.selectFormat("\(r.w)x\(r.h)@\(fps)") }
+                })) {
+                    ForEach(frameRates, id: \.self) { Text("\($0) fps").tag(Optional($0)) }
+                }
+                .disabled(frameRates.count < 2)
+                .help("Frames per second. Match your region's mains frequency (50 or 60 Hz) to avoid flicker.")
+                Toggle("Mirror Preview", isOn: $cam.mirrored)
+                    .help("Flip the preview horizontally, like a mirror. Does not affect what other apps receive.")
             }
-            .disabled(cam.formats.isEmpty)
-            .help("Capture size. Higher resolutions cost more CPU and USB bandwidth.")
-            Picker("Frame Rate", selection: Binding(get: { selectedFormat?.fps }, set: { fps in
-                if let r = selectedSize, let fps { cam.selectFormat("\(r.w)x\(r.h)@\(fps)") }
-            })) {
-                ForEach(frameRates, id: \.self) { Text("\($0) fps").tag(Optional($0)) }
-            }
-            .disabled(frameRates.count < 2)
-            .help("Frames per second. Match your region's mains frequency (50 or 60 Hz) to avoid flicker.")
-            Toggle("Mirror Preview", isOn: $cam.mirrored)
-                .help("Flip the preview horizontally, like a mirror. Does not affect what other apps receive.")
         }
     }
 
@@ -233,7 +292,7 @@ struct InspectorView: View {
                 Button { presets.apply(p.id) } label: {
                     LabeledContent {
                         HStack(spacing: 8) {
-                            let apps = presets.boundApps(for: p.id).map(Self.appName)
+                            let apps = showAll ? presets.boundApps(for: p.id).map(Self.appName) : []
                             if !apps.isEmpty { Text(apps.joined(separator: ", ")).foregroundStyle(.secondary).lineLimit(1) }
                             if presets.startupPresetID == p.id { Text("At launch").foregroundStyle(.secondary) }
                             if i < 5 { Text("⌘\(i + 1)").foregroundStyle(.tertiary).monospacedDigit() }
@@ -248,16 +307,18 @@ struct InspectorView: View {
                     Toggle("Apply at Launch", isOn: Binding(get: { presets.startupPresetID == p.id },
                                                             set: { presets.startupPresetID = $0 ? p.id : nil }))
                     Divider()
-                    Button("Use With App…") { pickApp(for: p.id, in: presets) }
-                    let bound = presets.boundApps(for: p.id)
-                    if !bound.isEmpty {
-                        Menu("Remove App Binding") {
-                            ForEach(bound, id: \.self) { id in
-                                Button(Self.appName(id)) { presets.unbind(app: id) }
+                    if showAll {
+                        Button("Use With App…") { pickApp(for: p.id, in: presets) }
+                        let bound = presets.boundApps(for: p.id)
+                        if !bound.isEmpty {
+                            Menu("Remove App Binding") {
+                                ForEach(bound, id: \.self) { id in
+                                    Button(Self.appName(id)) { presets.unbind(app: id) }
+                                }
                             }
                         }
+                        Divider()
                     }
-                    Divider()
                     Button("Rename…") { renameText = p.name; renaming = p }
                     Button("Delete", role: .destructive) { presets.delete(p.id) }
                 }
@@ -266,8 +327,10 @@ struct InspectorView: View {
                 footnote("Save the current look, then switch back to it any time with ⌘1 to ⌘5.")
             }
             Button("Save Preset…") { newName = presets.defaultName; saving = true }
-            Button("Export Presets…") { exportPresets(presets) }.disabled(presets.items.isEmpty)
-            Button("Import Presets…") { importPresets(presets) }
+            if showAll {
+                Button("Export Presets…") { exportPresets(presets) }.disabled(presets.items.isEmpty)
+                Button("Import Presets…") { importPresets(presets) }
+            }
             if let lock = cam.settingsLock {
                 @Bindable var lock = lock
                 Toggle("Keep These Settings", isOn: $lock.isEnabled)
@@ -348,15 +411,52 @@ struct InspectorView: View {
             footnote(cam.isSubjectDetected ? "Following you. Manual framing is paused." : "Looking for a person…")
         }
         framingRow
-        if let af = cam.state("focus-auto") {
+        if showAll, let af = cam.state("focus-auto") {
             Toggle(af.control.name, isOn: Binding(get: { autoOn(af.id) }, set: { v in withAnimation(.snappy) { cam.set(af.id, [v ? 1 : 0]) } }))
                 .help("Let the camera focus by itself. Turn off to set focus manually.")
             if let f = cam.state("focus"), !autoOn("focus-auto") { slider(f) }
         }
-        vendorRows(vendorControls(in: "Framing"))
-        if hasViewControls {
+        if showAll {
+            vendorRows(vendorControls(in: "Framing"))
+        }
+        if showAll, hasViewControls {
             Button("Reset View") { cam.resetView() }
                 .help("Return zoom and framing to the full field of view.")
+        }
+    }
+
+    // MARK: Describe a look
+
+    /// Free text -> on-device model -> control writes. Enter applies; Undo restores the previous image.
+    private var lookRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                TextField("Describe a look, e.g. warmer, black and white", text: $lookText)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(submitLook)
+                    .disabled(lookBusy)
+                    .accessibilityLabel("Describe a look")
+                if lookBusy {
+                    ProgressView().controlSize(.small)
+                } else if cam.lookUndo != nil {
+                    Button("Undo") { cam.undoLook() }.buttonStyle(.link).font(.subheadline)
+                }
+            }
+            if let why = LookAssistant.unavailableReason {
+                footnote(why)
+            }
+        }
+        .help("Type what you want the picture to look like and press Return. Runs on this Mac; nothing is sent anywhere.")
+    }
+
+    private func submitLook() {
+        let text = lookText
+        guard !text.trimmingCharacters(in: .whitespaces).isEmpty, !lookBusy else { return }
+        lookBusy = true
+        Task {
+            await cam.applyLook(text)
+            lookBusy = false
+            lookText = ""
         }
     }
 
