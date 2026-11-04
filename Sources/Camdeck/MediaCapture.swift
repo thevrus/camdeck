@@ -65,10 +65,11 @@ final class MediaCapture: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFile
     /// Takes the microphone out of the session once a movie is done. Session queue.
     func detachAudio(from session: AVCaptureSession) {
         guard let input = audioInput else { return }
+        audioInput = nil
+        guard session.inputs.contains(input) else { return }
         session.beginConfiguration()
         session.removeInput(input)
         session.commitConfiguration()
-        audioInput = nil
     }
 
     func fileOutput(_ output: AVCaptureFileOutput, didStartRecordingTo url: URL, from connections: [AVCaptureConnection]) {
@@ -80,6 +81,7 @@ final class MediaCapture: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFile
         // A movie that stopped on an error can still be complete; AVFoundation says so in the userInfo.
         let finished = (error as NSError?)?.userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool
         let result: Result<URL, Error> = error == nil || finished == true ? .success(url) : .failure(error!)
+        if case .failure = result { try? FileManager.default.removeItem(at: url) }   // an empty or broken file
         let done = onMovieFinished
         Task { @MainActor in done?(result) }
     }

@@ -461,6 +461,7 @@ final class CameraController {
     @ObservationIgnored let capture = MediaCapture()
     /// True while a movie records; keeps the session running even if the window closes.
     private(set) var isRecording = false { didSet { updateSessionRunning() } }
+    @ObservationIgnored private var startPending = false
     /// When frames started reaching the file, for the elapsed time in the toolbar. Nil while starting.
     private(set) var recordingStarted: Date?
 
@@ -486,11 +487,14 @@ final class CameraController {
             sessionQueue.async { capture.stopRecording() }
             return
         }
-        guard currentDevice != nil else { return }
+        guard currentDevice != nil, !startPending else { return }
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized: startRecording(withAudio: true)
         case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .audio) { ok in Task { @MainActor in self.startRecording(withAudio: ok) } }
+            startPending = true   // the permission prompt is up; a second press must not start a second movie
+            AVCaptureDevice.requestAccess(for: .audio) { ok in
+                Task { @MainActor in self.startPending = false; self.startRecording(withAudio: ok) }
+            }
         default: startRecording(withAudio: false)
         }
     }
@@ -513,6 +517,7 @@ final class CameraController {
         sessionQueue.async { capture.detachAudio(from: session) }
         switch result {
         case .success: showToast("Video saved to Movies")
+        case .failure(let e as NSError) where e.code == AVError.noDataCaptured.rawValue: showToast("Nothing recorded")
         case .failure(let e): NSLog("recording failed: \(e)"); showToast("Couldn't save the video")
         }
     }
@@ -537,9 +542,11 @@ final class CameraController {
             framer.onStep = { [weak self] box, cmd in self?.autoFramerStep(box, cmd) }
             zebra.onEnabledChange = { [sessionQueue, weak framer] in sessionQueue.async { framer?.updateConnection() } }
         }
+        if isRecording { sessionQueue.async { capture.stopRecording() } }   // the movie belongs to the old camera
         sessionQueue.async {
             session.beginConfiguration()
-            session.inputs.forEach { session.removeInput($0) }
+            // Video inputs only: a recording's microphone is MediaCapture's to remove.
+            for case let i as AVCaptureDeviceInput in session.inputs where i.device.hasMediaType(.video) { session.removeInput(i) }
             if let input = try? AVCaptureDeviceInput(device: cam), session.canAddInput(input) { session.addInput(input) }
             if !attachOutput {
                 for o in [framer.output, capture.photoOutput, capture.movieOutput] as [AVCaptureOutput] where session.canAddOutput(o) { session.addOutput(o) }
