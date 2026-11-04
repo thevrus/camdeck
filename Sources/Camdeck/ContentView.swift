@@ -28,7 +28,7 @@ struct ContentView: View {
                     Button { cam.takePhoto() } label: {
                         Label("Take Photo", systemImage: "camera")
                     }
-                    .disabled(cam.currentDevice == nil)
+                    .disabled(!cam.canTakePhoto)
                     .help("Take Photo (⌘T)")
                     RecordButton(cam: cam)
                 }
@@ -204,13 +204,11 @@ private struct RecordButton: View {
         Button { cam.toggleRecording() } label: {
             if cam.isRecording {
                 Label {
-                    if let start = cam.recordingStarted {
-                        TimelineView(.periodic(from: start, by: 1)) { ctx in
-                            Text(Duration.seconds(ctx.date.timeIntervalSince(start).rounded(.down)).formatted(.time(pattern: .minuteSecond)))
-                                .monospacedDigit()
-                        }
-                    } else {
-                        Text(Duration.seconds(0).formatted(.time(pattern: .minuteSecond))).monospacedDigit()
+                    // 0:00 until the first frame is written, then the elapsed time.
+                    let start = cam.recordingStarted ?? .distantFuture
+                    TimelineView(.periodic(from: cam.recordingStarted ?? .now, by: 1)) { ctx in
+                        Text(Duration.seconds(max(0, ctx.date.timeIntervalSince(start)).rounded(.down)).formatted(.time(pattern: .minuteSecond)))
+                            .monospacedDigit()
                     }
                 } icon: {
                     Image(systemName: "stop.circle.fill").foregroundStyle(.red)
@@ -220,7 +218,7 @@ private struct RecordButton: View {
                 Label("Record Video", systemImage: "record.circle")
             }
         }
-        .disabled(cam.currentDevice == nil && !cam.isRecording)
+        .disabled(!cam.canToggleRecording)
         .help(cam.isRecording ? "Stop Recording (⇧⌘T)" : "Record Video (⇧⌘T)")
         .accessibilityLabel(cam.isRecording ? "Stop Recording" : "Record Video")
     }

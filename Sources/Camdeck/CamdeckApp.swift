@@ -41,10 +41,10 @@ struct CamdeckApp: App {
                 Divider()
                 Button("Take Photo") { cam.takePhoto() }
                     .keyboardShortcut("t")
-                    .disabled(cam.currentDevice == nil)
+                    .disabled(!cam.canTakePhoto)
                 Button(cam.isRecording ? "Stop Recording" : "Record Video") { cam.toggleRecording() }
                     .keyboardShortcut("t", modifiers: [.command, .shift])
-                    .disabled(cam.currentDevice == nil && !cam.isRecording)
+                    .disabled(!cam.canToggleRecording)
                 Divider()
                 if CameraAgent.unavailableReason == nil {
                     Button("Describe a Look…") { cam.lookOpen = true }

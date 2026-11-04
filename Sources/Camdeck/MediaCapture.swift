@@ -15,11 +15,20 @@ final class MediaCapture: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFile
     /// Called on the main actor when a movie finishes writing (or fails).
     var onMovieFinished: (@MainActor (Result<URL, Error>) -> Void)?
 
-    /// Matches the outputs to the preview's mirroring, so what is saved looks like what was on screen.
-    func setMirrored(_ on: Bool) {
-        for c in [photoOutput.connection(with: .video), movieOutput.connection(with: .video)].compactMap({ $0 }) where c.isVideoMirroringSupported {
+    /// Follows the preview's mirroring, so what is saved looks like what was on screen. Session queue.
+    var mirrored = true { didSet { applyMirroring() } }
+
+    /// Adds the photo and movie outputs. Session queue, inside a configuration.
+    func attach(to session: AVCaptureSession) {
+        for o in [photoOutput, movieOutput] as [AVCaptureOutput] where session.canAddOutput(o) { session.addOutput(o) }
+    }
+
+    /// Call after the camera input changes: new input, new connections, mirroring set again. Session queue.
+    func applyMirroring() {
+        for output in [photoOutput, movieOutput] as [AVCaptureOutput] {
+            guard let c = output.connection(with: .video), c.isVideoMirroringSupported else { continue }
             c.automaticallyAdjustsVideoMirroring = false
-            c.isVideoMirrored = on
+            c.isVideoMirrored = mirrored
         }
     }
 
@@ -46,8 +55,6 @@ final class MediaCapture: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFile
     }
 
     // MARK: Movie
-
-    var isRecording: Bool { movieOutput.isRecording }
 
     /// Starts a movie. `withAudio` adds the default microphone for this recording.
     func startRecording(on session: AVCaptureSession, withAudio: Bool) throws {
@@ -88,15 +95,19 @@ final class MediaCapture: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFile
 
     // MARK: Files
 
-    /// "~/Pictures/Camdeck/Camdeck 2026-11-04 at 13.25.51.jpg", with " 2" and up when that name is taken.
-    private static func newFile(in dir: FileManager.SearchPathDirectory, ext: String) throws -> URL {
-        let folder = try FileManager.default.url(for: dir, in: .userDomainMask, appropriateFor: nil, create: true)
-            .appendingPathComponent("Camdeck", isDirectory: true)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    private static let fileDate: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
-        let base = "Camdeck \(f.string(from: Date()))"
+        return f
+    }()
+
+    /// "~/Pictures/Camdeck/Camdeck 2026-11-04 at 13.25.51.jpg", with " 2" and up when that name is taken.
+    private static func newFile(in dir: FileManager.SearchPathDirectory, ext: String) throws -> URL {
+        let folder = try FileManager.default.url(for: dir, in: .userDomainMask, appropriateFor: nil, create: false)
+            .appendingPathComponent("Camdeck", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let base = "Camdeck \(fileDate.string(from: Date()))"
         var url = folder.appendingPathComponent("\(base).\(ext)")
         var n = 2
         while FileManager.default.fileExists(atPath: url.path) {

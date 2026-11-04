@@ -33,7 +33,7 @@ final class CameraController {
         return Dictionary(uniqueKeysWithValues: profileControls.compactMap { c in vendorValues[c.id].map { (c.id, c.displayValue($0)) } })
     }
     var mirrored = true {
-        didSet { let capture = self.capture, m = mirrored; sessionQueue.async { capture.setMirrored(m) } }
+        didSet { let capture = self.capture, m = mirrored; sessionQueue.async { capture.mirrored = m } }
     }
     var authorized: Bool? = nil
     var profile: DeviceProfile = .generic
@@ -482,11 +482,7 @@ final class CameraController {
 
     /// Starts or stops a movie in ~/Movies/Camdeck. Sound comes from the default microphone when access is granted.
     func toggleRecording() {
-        if isRecording {
-            let capture = self.capture
-            sessionQueue.async { capture.stopRecording() }
-            return
-        }
+        if isRecording { stopMovie(); return }
         guard currentDevice != nil, !startPending else { return }
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized: startRecording(withAudio: true)
@@ -498,6 +494,12 @@ final class CameraController {
         default: startRecording(withAudio: false)
         }
     }
+
+    private func stopMovie() { let capture = self.capture; sessionQueue.async { capture.stopRecording() } }
+
+    /// Shared by the toolbar and the Camera menu.
+    var canTakePhoto: Bool { currentDevice != nil }
+    var canToggleRecording: Bool { currentDevice != nil || isRecording }
 
     private func startRecording(withAudio: Bool) {
         isRecording = true   // first: keeps the session running
@@ -534,7 +536,7 @@ final class CameraController {
         let session = self.session
         let framer = self.framer, attachOutput = framerAttached, mode = autoFraming.framing, run = wantsSession
         framerAttached = true
-        let capture = self.capture, mirrored = self.mirrored
+        let capture = self.capture
         if !attachOutput {
             capture.onMovieStarted = { [weak self] in if self?.isRecording == true { self?.recordingStarted = Date() } }
             capture.onMovieFinished = { [weak self] result in self?.movieFinished(result) }
@@ -542,16 +544,17 @@ final class CameraController {
             framer.onStep = { [weak self] box, cmd in self?.autoFramerStep(box, cmd) }
             zebra.onEnabledChange = { [sessionQueue, weak framer] in sessionQueue.async { framer?.updateConnection() } }
         }
-        if isRecording { sessionQueue.async { capture.stopRecording() } }   // the movie belongs to the old camera
+        if isRecording { stopMovie() }   // the movie belongs to the old camera
         sessionQueue.async {
             session.beginConfiguration()
             // Video inputs only: a recording's microphone is MediaCapture's to remove.
             for case let i as AVCaptureDeviceInput in session.inputs where i.device.hasMediaType(.video) { session.removeInput(i) }
             if let input = try? AVCaptureDeviceInput(device: cam), session.canAddInput(input) { session.addInput(input) }
             if !attachOutput {
-                for o in [framer.output, capture.photoOutput, capture.movieOutput] as [AVCaptureOutput] where session.canAddOutput(o) { session.addOutput(o) }
+                if session.canAddOutput(framer.output) { session.addOutput(framer.output) }
+                capture.attach(to: session)
             }
-            capture.setMirrored(mirrored)
+            capture.applyMirroring()
             framer.configure(mode: mode)
             session.commitConfiguration()
             if run, !session.isRunning { session.startRunning() }
