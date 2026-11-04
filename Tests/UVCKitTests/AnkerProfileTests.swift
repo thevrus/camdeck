@@ -16,7 +16,7 @@ final class AnkerProfileTests: XCTestCase {
     }
 
     func profile(_ pid: UInt16) throws -> DeviceProfile {
-        try XCTUnwrap(VendorProfiles.all.first { $0.matches(vendorID: 0x291A, productID: pid) })
+        try XCTUnwrap(VendorProfiles.bundled.first { $0.matches(vendorID: 0x291A, productID: pid) })
     }
 
     // MARK: Encoding

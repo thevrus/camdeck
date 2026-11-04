@@ -129,12 +129,10 @@ final class CameraController {
         } else if let pc = camera?.profileControls,
                   let ae = pc.controls.first(where: { $0.id == "aeMode" }) {
             let sh = pc.controls.first { $0.id == "shutter" }, iso = pc.controls.first { $0.id == "iso" }
-            let r: [String: Int] = await withCheckedContinuation { k in
-                io.async {
-                    var out: [String: Int] = [:]
-                    for c in [ae, sh, iso].compactMap({ $0 }) { if let v = try? pc.read(c) { out[c.id] = v } }
-                    k.resume(returning: out)
-                }
+            let r: [String: Int] = await onIO {
+                var out: [String: Int] = [:]
+                for c in [ae, sh, iso].compactMap({ $0 }) { if let v = try? pc.read(c) { out[c.id] = v } }
+                return out
             }
             if r["aeMode"] == 2 {
                 text = ExposureFormat.readout(
@@ -146,16 +144,31 @@ final class CameraController {
         autoReadout = text
     }
 
+    static let cameraIssueURL = URL(string: "https://github.com/thevrus/camdeck/issues/new?template=camera.yml")!
+
+    /// Copies a Markdown report of the camera's controls and opens the "support my camera" issue form.
+    func reportCamera() async {
+        guard let dev = uvc else { return }
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        let report = await onIO { CameraReport.markdown(for: dev, appVersion: version) }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(report, forType: .string)
+        NSWorkspace.shared.open(Self.cameraIssueURL)
+    }
+
+    /// Runs `body` on the serial USB queue and returns its result.
+    private func onIO<T>(_ body: @escaping () -> T) async -> T {
+        await withCheckedContinuation { k in io.async { k.resume(returning: body()) } }
+    }
+
     func readStandard(_ ids: [String]) async -> [String: [Int]] {
         guard let dev = uvc else { return [:] }
         let controls = controlsByID
         let wanted = ids.compactMap { id in controls[id].map { (id, $0) } }
-        return await withCheckedContinuation { k in
-            io.async {
-                var out: [String: [Int]] = [:]
-                for (id, c) in wanted { if let v = try? dev.read(c) { out[id] = v } }
-                k.resume(returning: out)
-            }
+        return await onIO {
+            var out: [String: [Int]] = [:]
+            for (id, c) in wanted { if let v = try? dev.read(c) { out[id] = v } }
+            return out
         }
     }
 
@@ -340,6 +353,24 @@ final class CameraController {
         syncCenterStage()
     }
 
+    /// The camera has a paired Desk View camera (Continuity Camera, Macs with a Center Stage camera).
+    var deskViewSupported: Bool { currentDevice?.companionDeskViewCamera != nil }
+
+    @ObservationIgnored private var deskViewApp: AVCaptureDeskViewApplication?
+
+    /// Opens Apple's Desk View app (or brings it to the front).
+    func openDeskView() {
+        guard deskViewApp == nil else { return } // a launch is already in flight
+        let app = AVCaptureDeskViewApplication()
+        deskViewApp = app // kept alive until the launch finishes
+        app.present { [weak self] error in
+            Task { @MainActor in
+                self?.deskViewApp = nil
+                if error != nil { self?.showToast("Couldn't open Desk View") }
+            }
+        }
+    }
+
     /// Re-read after selection or activation; Control Center can change it behind our back.
     private func syncCenterStage() {
         let v = AVCaptureDevice.isCenterStageEnabled
@@ -497,6 +528,10 @@ final class CameraController {
         guard let v = UInt16(t.prefix(4), radix: 16), let p = UInt16(t.suffix(4), radix: 16) else { return nil }
         return (v, p)
     }
+
+    /// A camera is selected and it isn't USB (built-in, iPhone, virtual). Judged from the uniqueID,
+    /// so it is known before the USB handle attaches.
+    var isNonUSBCamera: Bool { currentDevice != nil && selectedID.flatMap(Self.usbIDs) == nil }
 
     private func attachUVC() {
         uvc = nil; camera = nil; reframe = nil; deviceInfo = nil; usbWarning = nil; presets = nil; settingsLock = nil; stopUsageMonitor(); capabilityProviders = [:]; pendingReframe = nil

@@ -1,6 +1,6 @@
 cask "camdeck" do
-  version "0.1.2"
-  sha256 "77a4f1ffc944ddf294782a6388a03ab54180cf435f016d0b93454b2025fd4592"
+  version "0.2.0"
+  sha256 "64a0063ea66b11bb4fb36d54a1b6fea9a60f2898fa69b5b78711c72b26661f52"
 
   url "https://github.com/thevrus/camdeck/releases/download/v#{version}/Camdeck.dmg"
   name "Camdeck"

@@ -12,7 +12,7 @@ final class ProfileTests: XCTestCase {
     }
 
     func link() throws -> DeviceProfile {
-        try XCTUnwrap(VendorProfiles.all.first { $0.matches(vendorID: 0x2E1A, productID: 0x4C03) })
+        try XCTUnwrap(VendorProfiles.bundled.first { $0.matches(vendorID: 0x2E1A, productID: 0x4C03) })
     }
 
     func control(_ id: String) throws -> ProfileControl { try XCTUnwrap(link().control(id)) }

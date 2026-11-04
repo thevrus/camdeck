@@ -1,14 +1,14 @@
 import Foundation
 import UVCKit
 
-func fmt(_ v: [Int]?) -> String { v.map { $0.count == 1 ? "\($0[0])" : "(\($0.map(String.init).joined(separator: ", ")))" } ?? "-" }
+let fmt = CameraReport.fmt
 
 func fail(_ m: String) -> Never { FileHandle.standardError.write(Data((m + "\n").utf8)); exit(1) }
 
 /// `uvcctl get <id>` / `uvcctl set <id> <value>` against the first device whose profile defines <id>.
 func runProfileCommand(_ args: [String]) -> Never {
     guard args.count >= 2, args[0] == "get" || (args[0] == "set" && args.count >= 3) else {
-        fail("usage: uvcctl [get <control> | set <control> <value> | framing-calibrate | framing-run [seconds] [close|medium|wide]]")
+        fail("usage: uvcctl [report [vid:pid] | get <control> | set <control> <value> | framing-calibrate | framing-run [seconds] [close|medium|wide]]")
     }
     guard let dev = UVCDevice.enumerate().first(where: { $0.profile.control(args[1]) != nil && $0.supports($0.profile.control(args[1])!) }),
           let c = dev.profile.control(args[1]) else {
@@ -59,6 +59,15 @@ if cliArgs.first == "framing-run" {
     let secs = cliArgs.count > 1 ? Double(cliArgs[1]) ?? 20 : 20
     let mode = cliArgs.count > 2 ? FramingMode(rawValue: cliArgs[2]) ?? .medium : .medium
     FramingTool.liveRun(seconds: secs, mode: mode)
+}
+if cliArgs.first == "report" {
+    // `uvcctl report [vid:pid]`: Markdown for a "support my camera" issue, with a starter profile.
+    let all = UVCDevice.enumerate()
+    let ids = cliArgs.dropFirst().first?.lowercased().replacingOccurrences(of: "0x", with: "").split(separator: ":").compactMap { UInt16($0, radix: 16) }
+    let picked = ids.map { w in all.filter { w == [$0.vendorID, $0.productID] } } ?? all
+    if picked.isEmpty { fail(all.isEmpty ? "no UVC devices found" : "no device matches \(cliArgs[1])") }
+    print(picked.map { CameraReport.markdown(for: $0) }.joined(separator: "\n---\n\n"), terminator: "")
+    exit(0)
 }
 if CommandLine.arguments.count > 1 { runProfileCommand(Array(CommandLine.arguments.dropFirst())) }
 

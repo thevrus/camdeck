@@ -44,6 +44,18 @@ Add `?camera=Name` to any link to pick the camera first. Use `%20` for spaces.
 open -g "camdeck://preset/Meeting"
 ```
 
+### Stream Deck
+
+No plugin needed. Drag **System → Website** onto a key and set its URL to a Camdeck link, such as `camdeck://preset/Meeting`. Leave **GET request in background** off; it's for web hooks.
+
+If a key doesn't switch Camdeck, point **System → Open** at an executable script instead:
+
+```sh
+printf '#!/bin/sh\nopen -g "camdeck://preset/Meeting"\n' > ~/camdeck-meeting.sh && chmod +x ~/camdeck-meeting.sh
+```
+
+Useful keys: one per preset (`camdeck://preset/1`, `camdeck://preset/2`…), `camdeck://reset-view`, `camdeck://lock/on`, `camdeck://lock/off`, and `camdeck://camera/Name` to switch cameras.
+
 ## Which cameras work
 
 Almost any USB webcam works for the basics (picture, exposure, zoom, focus, color). That includes Logitech Brio and C920, Elgato Facecam, Razer Kiyo and Anker PowerConf.
@@ -58,7 +70,7 @@ Some cameras get extra features:
 | OBSBOT Tiny 2, Tiny SE, Meet | Planned |
 | Opal Tadpole, C1 | Planned |
 
-Own a camera that isn't listed? [Open an issue](https://github.com/thevrus/camdeck/issues) and we'll look at adding it.
+Own a camera that isn't listed? Plug it in and choose **Help → Report Your Camera…** in Camdeck. It copies a report of the camera's controls and opens a [GitHub issue](https://github.com/thevrus/camdeck/issues/new?template=camera.yml) to paste it into.
 
 ## Common questions
 
@@ -136,8 +148,8 @@ Run the workflow from the Actions tab for a dry run that publishes nothing. `mak
 
 ## Adding a camera
 
-1. Plug it in and run `uvcctl` to dump its descriptor.
+1. Plug it in and run `swift run uvcctl report`. It prints the descriptor, the standard control ranges and a starter JSON profile with the camera's IDs and extension units filled in.
 2. Standard controls already work.
-3. Map simple vendor controls in a JSON profile. Schema in [docs/profile-schema.md](docs/profile-schema.md).
+3. Map simple vendor controls in that profile. Schema in [docs/profile-schema.md](docs/profile-schema.md). To try it without rebuilding, put the file in `~/Library/Application Support/Camdeck/Profiles/` and restart Camdeck.
 4. Write a code driver only for features that need logic.
 5. Add the descriptor as a test fixture.

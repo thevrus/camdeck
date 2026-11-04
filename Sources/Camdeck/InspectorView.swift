@@ -69,6 +69,7 @@ struct InspectorView: View {
                     }
                 }
             }
+            if cam.isNonUSBCamera { noPictureControlsNote }
             if showAll, !effects.items.isEmpty { effectsSection }
             if let presets = cam.presets { presetsSection(presets) }
             if showAll, hasAny(advancedIDs) || cam.state("roll") != nil {
@@ -99,7 +100,7 @@ struct InspectorView: View {
     private var exposureRowIDs: [String] { showAll ? Self.exposureIDs : Self.standardExposure }
 
     private var showFraming: Bool {
-        let core = ["zoom", "pantilt"].contains { cam.state($0) != nil } || cam.centerStageSupported
+        let core = ["zoom", "pantilt"].contains { cam.state($0) != nil } || cam.centerStageSupported || cam.deskViewSupported
         guard showAll else { return core }
         return cam.hasViewControls || core || cam.state("focus-auto") != nil || !vendorControls(in: "Framing").isEmpty
     }
@@ -133,6 +134,22 @@ struct InspectorView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.link)
+        }
+    }
+
+    /// Built-in, iPhone and other non-USB cameras are not UVC devices, so there are no picture controls to show.
+    /// (macOS gives apps no zoom, exposure or white balance on them; the iPhone even reports as `.external`.)
+    private var noPictureControlsNote: some View {
+        Section {
+            footnote("Brightness and color controls need a USB webcam.")
+            Button { effects.openSystemPanel() } label: {
+                Text("Studio Light, Portrait and Background still work. Open Video Effects.")
+                    .font(.footnote)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.link)
+            .help("Opens the system Video Effects panel.")
         }
     }
 

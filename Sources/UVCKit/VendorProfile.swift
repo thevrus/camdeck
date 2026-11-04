@@ -374,19 +374,32 @@ public enum VendorProfiles {
         return nil
     }
 
-    /// Every JSON file in Resources/Profiles. Files that fail to decode are logged and skipped.
-    public static let all: [DeviceProfile] = {
+    /// Where users drop their own profiles: ~/Library/Application Support/Camdeck/Profiles.
+    /// Read once at launch, so a new or edited file takes effect after Camdeck restarts.
+    public static let userDirectory = PresetStore.defaultDirectory.appendingPathComponent("Profiles", isDirectory: true)
+
+    /// User profiles first, then the bundled ones, so a user file for the same camera wins.
+    public static let all: [DeviceProfile] = load(directory: userDirectory) + bundled
+
+    /// Profiles shipped inside the app only. Tests use this so a developer's own user profiles can't change results.
+    static let bundled: [DeviceProfile] = {
         guard let dir = profilesDirectory() else {
             NSLog("Camdeck_UVCKit resource bundle not found; using generic profile only")
             return []
         }
-        let urls = ((try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
-            .filter { $0.pathExtension == "json" }
+        return load(directory: dir)
+    }()
+
+    /// Every JSON file in `directory`, sorted by name. A missing directory yields nothing;
+    /// files that fail to decode or validate are logged and skipped.
+    static func load(directory: URL) -> [DeviceProfile] {
+        let urls = ((try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension.lowercased() == "json" }
         return urls.sorted { $0.lastPathComponent < $1.lastPathComponent }.compactMap { url in
             do { return try DeviceProfile.decode(Data(contentsOf: url)) }
-            catch { NSLog("profile \(url.lastPathComponent) rejected: \(error)"); return nil }
+            catch { NSLog("profile \(url.path) rejected: \(error)"); return nil }
         }
-    }()
+    }
 
     public static func profile(vendorID: UInt16, productID: UInt16) -> DeviceProfile {
         all.first { $0.matches(vendorID: vendorID, productID: productID) } ?? .generic

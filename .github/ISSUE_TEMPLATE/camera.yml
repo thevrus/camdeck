@@ -1,0 +1,37 @@
+name: Support my camera
+description: Ask for a camera to be added, or for more of its controls.
+title: "Camera: "
+labels: ["camera"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! The camera report tells us which controls your camera has, so we can add it without owning one.
+
+        **Get the report:** in Camdeck choose **Help → Report Your Camera…**. It copies the report and opens this page; paste it below.
+        Developers can also run `swift run uvcctl report` from a checkout.
+  - type: input
+    id: camera
+    attributes:
+      label: Camera
+      description: Brand and model, as printed on the box.
+      placeholder: Logitech MX Brio
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Camera report
+      description: Paste the report from Help → Report Your Camera… (or `uvcctl report`).
+    validations:
+      required: true
+  - type: textarea
+    id: wanted
+    attributes:
+      label: What's missing
+      description: Controls or modes the maker's app has that Camdeck doesn't (for example HDR, auto framing, desk view).
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: macOS version, hub or dock, what already works.

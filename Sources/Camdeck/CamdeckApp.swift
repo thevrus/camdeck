@@ -73,6 +73,11 @@ struct CamdeckApp: App {
                 Button("Video Effects…") { effects.openSystemPanel() }
             }
             InspectorCommands()
+            CommandGroup(after: .help) {
+                Button("Report Your Camera…") { Task { await cam.reportCamera() } }
+                .disabled(!cam.hasUVC)
+                .help("Copies a report of your camera's controls and opens a GitHub issue to paste it into.")
+            }
         }
 
         Settings {
@@ -125,6 +130,10 @@ struct FramingModeControls: View {
                 Text("Apple's built-in tracking. The camera pans and zooms to keep you centered as you move.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
+        }
+        if cam.deskViewSupported {
+            Button("Desk View…") { cam.openDeskView() }
+                .help("Opens Apple's Desk View, which shows your desk from above in its own window.")
         }
         if cam.canAutoFrame {
             Picker("Auto Framing", selection: $cam.autoFraming) {

@@ -2,6 +2,8 @@
 
 Profiles are JSON files in `Sources/UVCKit/Resources/Profiles/`, loaded through `Bundle.module` by `VendorProfiles`. Swift code is a generic interpreter (`DeviceProfile`, `ProfileControl`, `UVCDevice.readProfile/writeProfile`); nothing about a device is hardcoded. A file that fails to decode or validate is logged and skipped.
 
+Users can add or override profiles without rebuilding: drop a `.json` file into `~/Library/Application Support/Camdeck/Profiles/` and restart Camdeck. User profiles are checked before the bundled ones, so a user file matching the same camera wins. Rejected files are logged (`log stream --predicate 'eventMessage CONTAINS "profile"'`).
+
 ## Top level
 
 | Key | Type | Notes |
