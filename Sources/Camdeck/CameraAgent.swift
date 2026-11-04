@@ -177,6 +177,7 @@ enum CameraAgent {
         let options = GenerationOptions(temperature: 0.2, maximumResponseTokens: 200)
         // Positions go in the prompt, not the instructions, so the prewarmed session stays valid while they drift.
         let prompt = request + "\n\n" + positions(on: cam)
+        #if compiler(>=6.4)   // the macOS 27 SDK (Xcode 27); builds with Xcode 26 leave the picture out
         if #available(macOS 27, *), withPicture, SystemLanguageModel.default.capabilities.contains(.vision),
            let picture = await cam.previewSnapshot() {
             _ = try await session.respond(options: options) {
@@ -184,15 +185,17 @@ enum CameraAgent {
                 "The attached image is the camera picture right now. Use it to judge color and exposure."
                 Attachment(picture).label("Camera picture")
             }
-        } else {
-            _ = try await session.respond(to: prompt, options: options)
+            return
         }
+        #endif
+        _ = try await session.respond(to: prompt, options: options)
     }
 
     /// A short reason for the toast when the model could not help and the keyword parser found nothing either.
     private static func explain(_ error: Error) -> String? {
         let declined = "Apple Intelligence declined that request", language = "Apple Intelligence doesn't support this language yet"
         let tooLong = "That request is too long", downloading = "Apple Intelligence is still downloading"
+        #if compiler(>=6.4)   // macOS 27 SDK error types
         if #available(macOS 27, *) {
             if error is SystemLanguageModel.Error { return downloading }
             if let e = error as? LanguageModelError {
@@ -205,6 +208,7 @@ enum CameraAgent {
                 }
             }
         }
+        #endif
         switch error as? LanguageModelSession.GenerationError {   // what macOS 26 throws
         case .guardrailViolation, .refusal: return declined
         case .unsupportedLanguageOrLocale: return language
