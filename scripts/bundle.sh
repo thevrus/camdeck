@@ -77,6 +77,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
         <key>CFBundleURLSchemes</key><array><string>camdeck</string></array>
     </dict></array>
     <key>NSCameraUsageDescription</key><string>Camdeck shows a live preview of your camera and adjusts its controls.</string>
+    <key>NSMicrophoneUsageDescription</key><string>Camdeck records sound with the videos you record.</string>
 </dict>
 </plist>
 PLIST

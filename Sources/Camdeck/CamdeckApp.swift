@@ -39,6 +39,13 @@ struct CamdeckApp: App {
                 Toggle("Mirror Preview", isOn: $cam.mirrored)
                     .keyboardShortcut("m", modifiers: [.command, .option])
                 Divider()
+                Button("Take Photo") { cam.takePhoto() }
+                    .keyboardShortcut("t")
+                    .disabled(cam.currentDevice == nil)
+                Button(cam.isRecording ? "Stop Recording" : "Record Video") { cam.toggleRecording() }
+                    .keyboardShortcut("t", modifiers: [.command, .shift])
+                    .disabled(cam.currentDevice == nil && !cam.isRecording)
+                Divider()
                 if CameraAgent.unavailableReason == nil {
                     Button("Describe a Look…") { cam.lookOpen = true }
                         .keyboardShortcut("l")

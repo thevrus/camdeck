@@ -5,6 +5,9 @@
     <!-- Live preview via AVCaptureSession. Hardened runtime blocks camera access without it. -->
     <key>com.apple.security.device.camera</key>
     <true/>
+    <!-- Sound for recorded videos. Hardened runtime blocks the microphone without it. -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
     <!-- Camdeck sends UVC control requests over IOKit USB. The app is not sandboxed; this is
          listed under hardened-runtime resource access and is harmless where not enforced. -->
     <key>com.apple.security.device.usb</key>

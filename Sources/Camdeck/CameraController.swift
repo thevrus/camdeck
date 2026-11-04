@@ -32,7 +32,9 @@ final class CameraController {
     var profileValues: [String: Double] {
         return Dictionary(uniqueKeysWithValues: profileControls.compactMap { c in vendorValues[c.id].map { (c.id, c.displayValue($0)) } })
     }
-    var mirrored = true
+    var mirrored = true {
+        didSet { let capture = self.capture, m = mirrored; sessionQueue.async { capture.setMirrored(m) } }
+    }
     var authorized: Bool? = nil
     var profile: DeviceProfile = .generic
     var hasUVC: Bool { uvc != nil }
@@ -329,7 +331,7 @@ final class CameraController {
     /// True while the main window shows the preview. The capture session runs only while it is visible or auto
     /// framing needs frames, so a closed window leaves the camera off and other apps' camera use is detectable.
     var previewVisible = false { didSet { if oldValue != previewVisible { updateSessionRunning() } } }
-    private var wantsSession: Bool { previewVisible || autoFraming != .off }
+    private var wantsSession: Bool { previewVisible || autoFraming != .off || isRecording }
 
     private func updateSessionRunning() {
         let session = self.session, run = wantsSession && currentDevice != nil
@@ -454,6 +456,67 @@ final class CameraController {
 
     var currentDevice: AVCaptureDevice? { cameras.first { $0.uniqueID == selectedID } }
 
+    // MARK: Photo and video
+
+    @ObservationIgnored let capture = MediaCapture()
+    /// True while a movie records; keeps the session running even if the window closes.
+    private(set) var isRecording = false { didSet { updateSessionRunning() } }
+    /// When frames started reaching the file, for the elapsed time in the toolbar. Nil while starting.
+    private(set) var recordingStarted: Date?
+
+    /// Saves a still of the live picture to ~/Pictures/Camdeck, mirrored like the preview.
+    func takePhoto() {
+        guard currentDevice != nil else { return }
+        let session = self.session, capture = self.capture
+        sessionQueue.async {
+            guard session.isRunning else { Task { @MainActor in self.showToast("The camera is off") }; return }
+            capture.takePhoto { [weak self] result in
+                switch result {
+                case .success: self?.showToast("Photo saved to Pictures")
+                case .failure(let e): NSLog("photo failed: \(e)"); self?.showToast("Couldn't take the photo")
+                }
+            }
+        }
+    }
+
+    /// Starts or stops a movie in ~/Movies/Camdeck. Sound comes from the default microphone when access is granted.
+    func toggleRecording() {
+        if isRecording {
+            let capture = self.capture
+            sessionQueue.async { capture.stopRecording() }
+            return
+        }
+        guard currentDevice != nil else { return }
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: startRecording(withAudio: true)
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { ok in Task { @MainActor in self.startRecording(withAudio: ok) } }
+        default: startRecording(withAudio: false)
+        }
+    }
+
+    private func startRecording(withAudio: Bool) {
+        isRecording = true   // first: keeps the session running
+        if !withAudio { showToast("Recording without sound: microphone access is off") }
+        let session = self.session, capture = self.capture
+        sessionQueue.async {
+            do { try capture.startRecording(on: session, withAudio: withAudio) } catch {
+                Task { @MainActor in self.movieFinished(.failure(error)) }
+            }
+        }
+    }
+
+    private func movieFinished(_ result: Result<URL, Error>) {
+        isRecording = false
+        recordingStarted = nil
+        let session = self.session, capture = self.capture
+        sessionQueue.async { capture.detachAudio(from: session) }
+        switch result {
+        case .success: showToast("Video saved to Movies")
+        case .failure(let e): NSLog("recording failed: \(e)"); showToast("Couldn't save the video")
+        }
+    }
+
     /// The live picture, downscaled, for the language model. Nil when the preview is not running.
     func previewSnapshot() async -> CGImage? {
         guard wantsSession, currentDevice != nil else { return nil }
@@ -466,7 +529,10 @@ final class CameraController {
         let session = self.session
         let framer = self.framer, attachOutput = framerAttached, mode = autoFraming.framing, run = wantsSession
         framerAttached = true
+        let capture = self.capture, mirrored = self.mirrored
         if !attachOutput {
+            capture.onMovieStarted = { [weak self] in if self?.isRecording == true { self?.recordingStarted = Date() } }
+            capture.onMovieFinished = { [weak self] result in self?.movieFinished(result) }
             framer.zebra = zebra
             framer.onStep = { [weak self] box, cmd in self?.autoFramerStep(box, cmd) }
             zebra.onEnabledChange = { [sessionQueue, weak framer] in sessionQueue.async { framer?.updateConnection() } }
@@ -475,7 +541,10 @@ final class CameraController {
             session.beginConfiguration()
             session.inputs.forEach { session.removeInput($0) }
             if let input = try? AVCaptureDeviceInput(device: cam), session.canAddInput(input) { session.addInput(input) }
-            if !attachOutput, session.canAddOutput(framer.output) { session.addOutput(framer.output) }
+            if !attachOutput {
+                for o in [framer.output, capture.photoOutput, capture.movieOutput] as [AVCaptureOutput] where session.canAddOutput(o) { session.addOutput(o) }
+            }
+            capture.setMirrored(mirrored)
             framer.configure(mode: mode)
             session.commitConfiguration()
             if run, !session.isRunning { session.startRunning() }

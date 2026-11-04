@@ -25,6 +25,15 @@ struct ContentView: View {
                     ToolbarSpacer(.fixed, placement: .primaryAction)
                 }
                 ToolbarItemGroup(placement: .primaryAction) {
+                    Button { cam.takePhoto() } label: {
+                        Label("Take Photo", systemImage: "camera")
+                    }
+                    .disabled(cam.currentDevice == nil)
+                    .help("Take Photo (⌘T)")
+                    RecordButton(cam: cam)
+                }
+                ToolbarSpacer(.fixed, placement: .primaryAction)
+                ToolbarItemGroup(placement: .primaryAction) {
                     cameraMenu
                     Toggle(isOn: $cam.mirrored) {
                         Label("Mirror", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
@@ -184,5 +193,35 @@ private struct ZebraStripes: View {
             ctx.stroke(stripes, with: .color(.white.opacity(0.85)), lineWidth: 2.5)
             ctx.stroke(stripes.offsetBy(dx: step / 2, dy: 0), with: .color(.black.opacity(0.55)), lineWidth: 2.5)
         }
+    }
+}
+
+/// Record / stop. While recording it shows the elapsed time, so the state is visible at a glance.
+private struct RecordButton: View {
+    let cam: CameraController
+
+    var body: some View {
+        Button { cam.toggleRecording() } label: {
+            if cam.isRecording {
+                Label {
+                    if let start = cam.recordingStarted {
+                        TimelineView(.periodic(from: start, by: 1)) { ctx in
+                            Text(Duration.seconds(ctx.date.timeIntervalSince(start).rounded(.down)).formatted(.time(pattern: .minuteSecond)))
+                                .monospacedDigit()
+                        }
+                    } else {
+                        Text(Duration.seconds(0).formatted(.time(pattern: .minuteSecond))).monospacedDigit()
+                    }
+                } icon: {
+                    Image(systemName: "stop.circle.fill").foregroundStyle(.red)
+                }
+                .labelStyle(.titleAndIcon)
+            } else {
+                Label("Record Video", systemImage: "record.circle")
+            }
+        }
+        .disabled(cam.currentDevice == nil && !cam.isRecording)
+        .help(cam.isRecording ? "Stop Recording (⇧⌘T)" : "Record Video (⇧⌘T)")
+        .accessibilityLabel(cam.isRecording ? "Stop Recording" : "Record Video")
     }
 }
