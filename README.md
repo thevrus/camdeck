@@ -153,3 +153,4 @@ Run the workflow from the Actions tab for a dry run that publishes nothing. `mak
 3. Map simple vendor controls in that profile. Schema in [docs/profile-schema.md](docs/profile-schema.md). To try it without rebuilding, put the file in `~/Library/Application Support/Camdeck/Profiles/` and restart Camdeck.
 4. Write a code driver only for features that need logic.
 5. Add the descriptor as a test fixture.
+6. List the camera in `scripts/cameras.json` so it shows on the [cameras page](https://thevrus.github.io/camdeck/cameras.html). The page is rebuilt from the profiles on every push, and the build fails if a profile is missing from that file.

@@ -1,0 +1,29 @@
+{
+  "_comment": "Source for site/cameras.html (scripts/gen-cameras-page.py). Every profile in Sources/UVCKit/Resources/Profiles must be listed here, or the generator fails.",
+  "cameras": [
+    {
+      "name": "Insta360 Link 2C",
+      "profile": "insta360-link.json",
+      "status": "tested",
+      "note": "The camera Camdeck is built on, used every day.",
+      "extras": ["Digital pan and tilt"]
+    },
+    {
+      "name": "Insta360 Link 2, Link",
+      "profile": "insta360-link.json",
+      "status": "untested"
+    },
+    {
+      "name": "AnkerWork C310",
+      "profile": "ankerwork-c310.json",
+      "status": "early"
+    },
+    {
+      "name": "Anker PowerConf C200",
+      "profile": "anker-powerconf-c200.json",
+      "status": "early"
+    },
+    { "name": "OBSBOT Tiny 2, Tiny SE, Meet", "status": "planned" },
+    { "name": "Opal Tadpole, C1", "status": "planned" }
+  ]
+}

@@ -1,11 +1,16 @@
 name: Pages
 
-# Publishes site/ (the one-page site) to GitHub Pages.
+# Publishes site/ to GitHub Pages. site/cameras.html is regenerated from the camera profiles first.
 # One-time: repo Settings > Pages > Source: GitHub Actions.
 on:
   push:
     branches: [main]
-    paths: ["site/**", ".github/workflows/pages.yml"]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+      - "Sources/UVCKit/Resources/Profiles/**"
+      - "scripts/cameras.json"
+      - "scripts/gen-cameras-page.py"
   workflow_dispatch:
 
 permissions:
@@ -25,6 +30,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Build the cameras page from the profiles
+        run: python3 scripts/gen-cameras-page.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
