@@ -454,6 +454,12 @@ final class CameraController {
 
     var currentDevice: AVCaptureDevice? { cameras.first { $0.uniqueID == selectedID } }
 
+    /// The live picture, downscaled, for the language model. Nil when the preview is not running.
+    func previewSnapshot() async -> CGImage? {
+        guard wantsSession, currentDevice != nil else { return nil }
+        return await framer.snapshot()
+    }
+
     func select(_ id: String) {
         guard let cam = cameras.first(where: { $0.uniqueID == id }) else { return }
         selectedID = id
@@ -794,6 +800,15 @@ final class CameraController {
     }
 
     // MARK: Auto exposure helper (bitmask: 1 manual, 2 auto, 8 aperture priority)
+
+    /// True while the camera's auto mode sets this control, so the cached manual value is stale.
+    func isAutoOwned(_ id: String) -> Bool {
+        switch LookAdjustment.autoGate(for: id) {
+        case "wb-auto": (value("wb-auto").first ?? 0) != 0
+        case "ae-mode": autoExposureOn()
+        default: false
+        }
+    }
 
     func autoExposureOn() -> Bool { value("ae-mode").first.map(UVCControl.isAutoExposure) ?? false }
     func setAutoExposure(_ on: Bool) {

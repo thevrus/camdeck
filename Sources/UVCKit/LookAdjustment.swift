@@ -37,16 +37,33 @@ public struct LookAdjustment: Equatable, Sendable {
         }
     }
 
+    /// The auto toggle that owns a manual control while it is on: "wb-auto" for wb-temp, "ae-mode" for exposure and gain.
+    public static func autoGate(for id: String) -> String? {
+        switch id {
+        case "wb-temp": "wb-auto"
+        case "exposure", "gain": "ae-mode"
+        default: nil
+        }
+    }
+
+    /// Settable range and current value of a control; nil when it has no usable range.
+    static func range(_ st: UVCControlState, current: Int?) -> (lo: Int, hi: Int, cur: Int)? {
+        guard st.canSet, let lo = st.min?.first, let hi = st.max?.first, hi > lo else { return nil }
+        return (lo, hi, current ?? st.cur?.first ?? st.def?.first ?? lo)
+    }
+
+    /// Where a control sits in its range, 0 ... 1: the inverse of a *level*.
+    public static func level(of st: UVCControlState, current: Int?) -> Double? {
+        range(st, current: current).map { Double($0.cur - $0.lo) / Double($0.hi - $0.lo) }
+    }
+
     /// Raw target values per control id. Only controls present in `states` and settable are produced.
     /// Setting a manual value turns the gating auto off (wb-temp -> wb-auto, exposure/gain -> ae-mode)
     /// unless the plan asks for that auto explicitly.
     public func resolve(states: [UVCControlState], current: [String: [Int]]) -> [String: [Int]] {
         var out: [String: [Int]] = [:]
         let byID = Dictionary(uniqueKeysWithValues: states.map { ($0.id, $0) })
-        func range(_ id: String) -> (lo: Int, hi: Int, cur: Int)? {
-            guard let st = byID[id], st.canSet, let lo = st.min?.first, let hi = st.max?.first, hi > lo else { return nil }
-            return (lo, hi, current[id]?.first ?? st.cur?.first ?? st.def?.first ?? lo)
-        }
+        func range(_ id: String) -> (lo: Int, hi: Int, cur: Int)? { byID[id].flatMap { Self.range($0, current: current[id]?.first) } }
         func clamp(_ v: Double, _ lo: Int, _ hi: Int) -> [Int] { [Int(v.rounded()).clamped(to: lo...hi)] }
         for (id, m) in moves where Self.imageControls.contains(id) {
             guard let r = range(id) else { continue }
@@ -60,7 +77,7 @@ public struct LookAdjustment: Equatable, Sendable {
             guard let st = byID[id], st.canSet else { continue }
             // A manual value in the same plan decides the auto: "auto off" alone leaves the picture wherever the
             // camera last had it, and "auto on" next to a manual value would make the camera ignore that value.
-            let manual = id == "wb-auto" ? out["wb-temp"] != nil : out["exposure"] != nil || out["gain"] != nil
+            let manual = out.keys.contains { Self.autoGate(for: $0) == id }
             if on == manual { continue }
             if id == "ae-mode" {
                 let supported = st.res?.first ?? 0x09
@@ -68,8 +85,9 @@ public struct LookAdjustment: Equatable, Sendable {
             } else { out[id] = [on ? 1 : 0] }
         }
         // Manual values need their auto off, or the camera ignores them.
-        if out["wb-temp"] != nil, let st = byID["wb-auto"], st.canSet { out["wb-auto"] = [0] }
-        if out["exposure"] != nil || out["gain"] != nil, let st = byID["ae-mode"], st.canSet { out["ae-mode"] = [1] }
+        for gate in Set(out.keys.compactMap(Self.autoGate(for:))) where byID[gate]?.canSet == true {
+            out[gate] = gate == "ae-mode" ? [1] : [0]
+        }
         return out
     }
 

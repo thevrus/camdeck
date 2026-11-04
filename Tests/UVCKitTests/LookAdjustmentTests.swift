@@ -24,6 +24,20 @@ final class LookAdjustmentTests: XCTestCase {
         XCTAssertEqual(out["brightness"], [64])
     }
 
+    func testLevelIsInverseOfLevels() {
+        let sat = state("saturation", 0, 200, cur: 100)
+        XCTAssertEqual(LookAdjustment.level(of: sat, current: 50), 0.25)
+        XCTAssertEqual(LookAdjustment.level(of: sat, current: nil), 0.5)
+        let out = LookAdjustment(levels: ["saturation": 0.25]).resolve(states: states, current: [:])
+        XCTAssertEqual(out["saturation"], [50])
+    }
+
+    func testAutoGate() {
+        XCTAssertEqual(LookAdjustment.autoGate(for: "wb-temp"), "wb-auto")
+        XCTAssertEqual(LookAdjustment.autoGate(for: "gain"), "ae-mode")
+        XCTAssertNil(LookAdjustment.autoGate(for: "brightness"))
+    }
+
     func testManualWhiteBalanceTurnsAutoOff() {
         let out = LookAdjustment(moves: ["wb-temp": -0.15]).resolve(states: states, current: [:])
         XCTAssertEqual(out["wb-temp"], [4045])

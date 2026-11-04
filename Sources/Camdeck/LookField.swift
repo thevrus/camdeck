@@ -8,8 +8,6 @@ struct LookField: View {
     @State private var busy = false
     @FocusState private var focused: Bool
 
-    private static let misses: Set<String> = ["", CameraAgent.nothingDone]
-
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "wand.and.sparkles")
@@ -33,7 +31,8 @@ struct LookField: View {
         .padding(.horizontal, 24)
         .help("Runs on this Mac. Nothing is sent anywhere.")
         .defaultFocus($focused, true)
-        .onAppear { focused = true }
+        .onAppear { focused = true; CameraAgent.prewarm(for: cam) }
+        .onDisappear { CameraAgent.discardWarm() }
         .onExitCommand { cam.lookOpen = false }
     }
 
@@ -59,12 +58,13 @@ struct LookField: View {
         guard !t.trimmingCharacters(in: .whitespaces).isEmpty, !busy else { return }
         busy = true
         Task {
-            let msg = await CameraAgent.run(t, on: cam)
+            let changed = await CameraAgent.run(t, on: cam)
             busy = false
-            if Self.misses.contains(msg) {
-                focused = true
-            } else {
+            if changed {
                 cam.lookOpen = false
+            } else {
+                focused = true
+                CameraAgent.prewarm(for: cam)   // ready for the reworded request
             }
         }
     }

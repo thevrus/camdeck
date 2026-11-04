@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreImage
 import Foundation
 import UVCKit
 
@@ -39,6 +40,8 @@ final class AutoFramer: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
     private var pausedUntil = Date.distantPast
     private var needsReset = false
     private var pendingTuning: FramingController.Tuning?
+    private var snapshotWaiters: [SnapshotWaiter] = []
+    private static let ciContext = CIContext(options: [.cacheIntermediates: false])
     /// Called on the main actor with each processed frame's result.
     var onStep: (@MainActor (CGRect?, PTZ) -> Void)?
     /// Fed every frame (it rate-limits itself and returns at once while disabled).
@@ -60,8 +63,33 @@ final class AutoFramer: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
 
     /// Call when auto framing or zebra turns on or off.
     func updateConnection() {
-        lock.lock(); let framing = mode != nil; lock.unlock()
-        output.connection(with: .video)?.isEnabled = framing || zebra?.isEnabled == true
+        // Under the lock: a waiter added between the read and the write must not see its frames switched off.
+        lock.lock(); defer { lock.unlock() }
+        output.connection(with: .video)?.isEnabled = mode != nil || !snapshotWaiters.isEmpty || zebra?.isEnabled == true
+    }
+
+    /// The next frame as an image no larger than `maxSide` on its long edge, for the language model to look at.
+    /// Turns frame delivery on for that one frame. Nil when no frame arrives within a second (preview stopped).
+    func snapshot(maxSide: CGFloat = 512) async -> CGImage? {
+        await withCheckedContinuation { (c: CheckedContinuation<CGImage?, Never>) in
+            let w = SnapshotWaiter(c, maxSide: maxSide)
+            lock.lock(); snapshotWaiters.append(w); lock.unlock()
+            updateConnection()
+            queue.asyncAfter(deadline: .now() + 1) { [weak self] in
+                w.resume(nil)
+                guard let self else { return }
+                self.lock.lock(); self.snapshotWaiters.removeAll { $0 === w }; self.lock.unlock()
+                self.updateConnection()
+            }
+        }
+    }
+
+    /// Copies the frame out: the capture pool reuses its buffers.
+    private static func image(from pb: CVPixelBuffer, maxSide: CGFloat) -> CGImage? {
+        var img = CIImage(cvPixelBuffer: pb)
+        let scale = min(1, maxSide / max(img.extent.width, img.extent.height))
+        if scale < 1 { img = img.transformed(by: CGAffineTransform(scaleX: scale, y: scale)) }
+        return ciContext.createCGImage(img, from: img.extent)
     }
 
     /// Per-device geometry: Reframe travel (nil = zoom-only framing), applied on the framer queue.
@@ -83,8 +111,14 @@ final class AutoFramer: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         let mode = self.mode, ptz = self.ptz, ranges = self.ranges, paused = Date() < pausedUntil, reset = needsReset && !paused
         if reset { needsReset = false }
         let tuning = pendingTuning; pendingTuning = nil
+        let waiters = snapshotWaiters; snapshotWaiters = []
         lock.unlock()
         if let tuning { engine.controller.tuning = tuning }
+        if !waiters.isEmpty {
+            let pb = CMSampleBufferGetImageBuffer(sb)
+            for w in waiters { w.resume(pb.flatMap { Self.image(from: $0, maxSide: w.maxSide) }) }
+            updateConnection()
+        }
         zebra?.process(sampleBuffer: sb)
         guard let mode, !paused, let pb = CMSampleBufferGetImageBuffer(sb) else { return }
         if reset { engine.reset() }
@@ -92,5 +126,17 @@ final class AutoFramer: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         guard let step = engine.process(pb, time: t.isFinite ? t : CACurrentMediaTime(), current: ptz, ranges: ranges, mode: mode) else { return }
         let box = step.box, cmd = step.command
         Task { @MainActor [weak self] in self?.onStep?(box, cmd) }
+    }
+}
+
+/// One pending `snapshot()` call; resumes exactly once, from a frame or from the timeout.
+private final class SnapshotWaiter: @unchecked Sendable {
+    let maxSide: CGFloat
+    private var continuation: CheckedContinuation<CGImage?, Never>?
+    private let lock = NSLock()
+    init(_ c: CheckedContinuation<CGImage?, Never>, maxSide: CGFloat) { continuation = c; self.maxSide = maxSide }
+    func resume(_ image: CGImage?) {
+        lock.lock(); let c = continuation; continuation = nil; lock.unlock()
+        c?.resume(returning: image)
     }
 }

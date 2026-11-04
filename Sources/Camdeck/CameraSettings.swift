@@ -31,9 +31,7 @@ extension CameraController {
     func applyLook(_ adj: LookAdjustment) async -> String {
         let id = selectedID
         var current = values
-        var live: [String] = []
-        if (value("wb-auto").first ?? 0) != 0 { live.append("wb-temp") }
-        if autoExposureOn() { live += ["exposure", "gain"] }
+        let live = ["wb-temp", "exposure", "gain"].filter(isAutoOwned)
         if !live.isEmpty { current.merge(await readStandard(live)) { _, fresh in fresh } }
         guard selectedID == id else { return "" }
         let writes = adj.resolve(states: states, current: current)

@@ -9,8 +9,8 @@ import UVCKit
 enum CameraAgent {
     /// Nil when the on-device model can be used; otherwise a short reason for the UI.
     static var unavailableReason: String? { LookAssistant.unavailableReason }
-    /// Toast and return value of `run` when neither the model nor the parser found anything to do.
-    static let nothingDone = "Couldn't tell what to do"
+    /// Toast when neither the model nor the parser found anything to do.
+    private static let nothingDone = "Couldn't tell what to do"
 
     // MARK: Execute
 
@@ -127,50 +127,128 @@ enum CameraAgent {
     // MARK: Run
 
     /// Executes `text`. Model with tools first; keyword fallback when the model is unavailable, fails or did
-    /// nothing. Shows a toast and returns its text. The state before the request is kept for `undoLook()`.
+    /// nothing. Shows a toast. Returns true when something changed; the state before the request is kept for
+    /// `undoLook()`.
     @discardableResult
-    static func run(_ text: String, on cam: CameraController) async -> String {
+    static func run(_ text: String, on cam: CameraController) async -> Bool {
         let request = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !request.isEmpty else { return "" }
+        guard !request.isEmpty else { return false }
         let id = cam.selectedID
         let before = UndoExtras(framing: cam.autoFraming, mirrored: cam.mirrored, center: cam.reframe?.center)
         let beforeSettings = cam.captureSettings()
+        let parsed = CameraCommand.parse(request, presets: cam.presets?.items.map(\.name) ?? [], resolutions: resolutions(of: cam))
         var done: [String] = []
         var covered: Set<String> = []
+        var failure: String?
         if unavailableReason == nil {
-            let log = ToolLog()
-            let session = LanguageModelSession(tools: tools(for: cam, log: log), instructions: instructions(for: cam))
+            let w = takeSession(for: cam)
+            let aboutThePicture = parsed.isEmpty || parsed.contains { kind(of: $0) == "look" }
             do {
-                _ = try await session.respond(to: request, options: GenerationOptions(temperature: 0.2, maximumResponseTokens: 200))
+                try await respond(w.session, to: request, on: cam, withPicture: aboutThePicture)
             } catch {
                 NSLog("CameraAgent: model failed: \(error)")
+                failure = explain(error)
             }
-            done = await log.entries
-            covered = await log.kinds
+            done = await w.log.entries
+            covered = await w.log.kinds
         }
-        guard cam.selectedID == id else { return "" }
+        guard cam.selectedID == id else { return false }
         // The model tends to make one tool call per request. The keyword parser fills in the parts of a
         // compound request ("warmer and zoom in") it did not cover, and takes over entirely when it failed.
         // A preset is a look of its own, and a reset or preset after the model's look would wipe it.
         if covered.contains("preset") { covered.insert("look") }
         if covered.contains("look") { covered.formUnion(["reset", "preset"]) }
-        let cmds = CameraCommand.parse(request, presets: cam.presets?.items.map(\.name) ?? [], resolutions: resolutions(of: cam))
-            .sorted { fillOrder(kind(of: $0)) < fillOrder(kind(of: $1)) }   // reset and preset before adjustments
+        let cmds = parsed.sorted { fillOrder(kind(of: $0)) < fillOrder(kind(of: $1)) }   // reset and preset before adjustments
         for c in cmds where !covered.contains(kind(of: c)) { done.append(await perform(c, on: cam)) }
         done.removeAll(where: \.isEmpty)
-        let msg: String
         if done.isEmpty {
-            msg = nothingDone
-        } else {
-            cam.lookUndo = beforeSettings
-            cam.undoExtras = before
-            msg = done.joined(separator: " · ")
+            cam.showToast(failure ?? nothingDone)
+            return false
         }
-        cam.showToast(msg)
-        return msg
+        cam.lookUndo = beforeSettings
+        cam.undoExtras = before
+        cam.showToast(done.joined(separator: " · "))
+        return true
+    }
+
+    /// Sends the request. On macOS 27, where the on-device model can see, a look request carries the live picture
+    /// so "fix my lighting" or "I look orange" is judged from the image, not just the words.
+    private static func respond(_ session: LanguageModelSession, to request: String, on cam: CameraController, withPicture: Bool) async throws {
+        let options = GenerationOptions(temperature: 0.2, maximumResponseTokens: 200)
+        // Positions go in the prompt, not the instructions, so the prewarmed session stays valid while they drift.
+        let prompt = request + "\n\n" + positions(on: cam)
+        if #available(macOS 27, *), withPicture, SystemLanguageModel.default.capabilities.contains(.vision),
+           let picture = await cam.previewSnapshot() {
+            _ = try await session.respond(options: options) {
+                prompt
+                "The attached image is the camera picture right now. Use it to judge color and exposure."
+                Attachment(picture).label("Camera picture")
+            }
+        } else {
+            _ = try await session.respond(to: prompt, options: options)
+        }
+    }
+
+    /// A short reason for the toast when the model could not help and the keyword parser found nothing either.
+    private static func explain(_ error: Error) -> String? {
+        let declined = "Apple Intelligence declined that request", language = "Apple Intelligence doesn't support this language yet"
+        let tooLong = "That request is too long", downloading = "Apple Intelligence is still downloading"
+        if #available(macOS 27, *) {
+            if error is SystemLanguageModel.Error { return downloading }
+            if let e = error as? LanguageModelError {
+                switch e {
+                case .guardrailViolation, .refusal: return declined
+                case .unsupportedLanguageOrLocale: return language
+                case .contextSizeExceeded: return tooLong
+                case .timeout: return "Apple Intelligence took too long; try again"
+                default: return nil
+                }
+            }
+        }
+        switch error as? LanguageModelSession.GenerationError {   // what macOS 26 throws
+        case .guardrailViolation, .refusal: return declined
+        case .unsupportedLanguageOrLocale: return language
+        case .exceededContextWindowSize: return tooLong
+        case .assetsUnavailable: return downloading
+        default: return nil
+        }
     }
 
     private static func fillOrder(_ kind: String) -> Int { ["reset": 0, "preset": 1].first { $0.key == kind }?.value ?? 2 }
+
+    // MARK: Session
+
+    /// A session with its tools' log, for one camera.
+    private struct Warm {
+        let camID: String?
+        let session: LanguageModelSession
+        let log: ToolLog
+    }
+    private static var warm: Warm?
+
+    /// Builds the session for the next request and loads the model, so the first answer comes sooner.
+    /// Call when the request field opens.
+    static func prewarm(for cam: CameraController) {
+        guard unavailableReason == nil else { return }
+        let w = makeSession(for: cam)
+        w.session.prewarm()
+        warm = w
+    }
+
+    /// Drops the prewarmed session (and the model it holds in memory). Call when the request field closes.
+    static func discardWarm() { warm = nil }
+
+    /// The prewarmed session when it is for this camera; a fresh one otherwise. Single use.
+    private static func takeSession(for cam: CameraController) -> Warm {
+        defer { warm = nil }
+        if let w = warm, w.camID == cam.selectedID { return w }
+        return makeSession(for: cam)
+    }
+
+    private static func makeSession(for cam: CameraController) -> Warm {
+        let log = ToolLog()
+        return Warm(camID: cam.selectedID, session: LanguageModelSession(tools: tools(for: cam, log: log), instructions: instructions(for: cam)), log: log)
+    }
 
     private static func instructions(for cam: CameraController) -> String {
         var lines = ["You operate a webcam app. Carry out the request with the tools, then answer in at most six words."]
@@ -180,9 +258,27 @@ enum CameraAgent {
             lines.append("Resolutions: \(res.joined(separator: ", ")). Frame rates: \(fps.map(String.init).joined(separator: ", ")).")
         }
         if let names = cam.presets?.items.map(\.name), !names.isEmpty { lines.append("Presets: \(names.joined(separator: ", ")).") }
-        lines.append("Image controls: " + cam.states.filter { $0.canSet && LookAdjustment.imageControls.contains($0.id) }.map(\.id).joined(separator: ", ") + ".")
+        let controls = imageControls(of: cam)
+        if !controls.isEmpty {
+            lines.append("Image controls:")
+            for st in controls { lines.append("- \(st.id)" + (LookAdjustment.describe(st.id).map { ": \($0)" } ?? "")) }
+        }
         lines.append("Use only ids that exist. Do nothing if the request is not about the camera.")
         return lines.joined(separator: "\n")
+    }
+
+    private static func imageControls(of cam: CameraController) -> [UVCControlState] {
+        cam.states.filter { $0.canSet && LookAdjustment.imageControls.contains($0.id) }
+    }
+
+    /// "Now: brightness 40%, wb-temp auto, …": where each image control sits in its range. "auto" while the camera
+    /// sets it itself (the cached value is stale then).
+    private static func positions(on cam: CameraController) -> String {
+        let parts = imageControls(of: cam).map { st in
+            if cam.isAutoOwned(st.id) { return "\(st.id) auto" }
+            return LookAdjustment.level(of: st, current: cam.value(st.id).first).map { "\(st.id) \(Int(($0 * 100).rounded()))%" } ?? st.id
+        }
+        return parts.isEmpty ? "" : "Now: " + parts.joined(separator: ", ") + "."
     }
 
     private static func tools(for cam: CameraController, log: ToolLog) -> [any Tool] {
