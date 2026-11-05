@@ -334,10 +334,12 @@ final class CameraController {
     private var wantsSession: Bool { previewVisible || autoFraming != .off || isRecording }
 
     private func updateSessionRunning() {
-        let session = self.session, run = wantsSession && currentDevice != nil
+        let session = self.session, run = wantsSession && currentDevice != nil, cam = currentDevice, mode = self.mode
         sessionQueue.async {
-            if run, !session.isRunning { session.startRunning() }
-            else if !run, session.isRunning { session.stopRunning() }
+            if run, !session.isRunning {
+                session.startRunning()
+                if let cam { mode.apply(to: cam) }
+            } else if !run, session.isRunning { session.stopRunning(); mode.release() }
         }
     }
     // MARK: Center Stage (Continuity Camera / Apple cameras)
@@ -450,7 +452,7 @@ final class CameraController {
         if !session.isRunning || session.inputs.isEmpty { select(selectedID!) }
         else {
             attachUVC()
-            if let cam = currentDevice { formats = FormatOption.options(for: cam); syncFormat(cam) }
+            if let cam = currentDevice { formats = FormatOption.options(for: cam) }
         }
     }
 
@@ -467,11 +469,11 @@ final class CameraController {
 
     /// Saves a still of the live picture to ~/Pictures/Camdeck, mirrored like the preview.
     func takePhoto() {
-        guard currentDevice != nil else { return }
+        guard let device = currentDevice else { return }
         let session = self.session, capture = self.capture
         sessionQueue.async {
             guard session.isRunning else { Task { @MainActor in self.showToast("The camera is off") }; return }
-            capture.takePhoto { [weak self] result in
+            capture.takePhoto(from: device) { [weak self] result in
                 switch result {
                 case .success: self?.showToast("Photo saved to Pictures")
                 case .failure(let e): NSLog("photo failed: \(e)"); self?.showToast("Couldn't take the photo")
@@ -536,7 +538,7 @@ final class CameraController {
         let session = self.session
         let framer = self.framer, attachOutput = framerAttached, mode = autoFraming.framing, run = wantsSession
         framerAttached = true
-        let capture = self.capture
+        let capture = self.capture, keeper = self.mode
         if !attachOutput {
             capture.onMovieStarted = { [weak self] in if self?.isRecording == true { self?.recordingStarted = Date() } }
             capture.onMovieFinished = { [weak self] result in self?.movieFinished(result) }
@@ -545,7 +547,15 @@ final class CameraController {
             zebra.onEnabledChange = { [sessionQueue, weak framer] in sessionQueue.async { framer?.updateConnection() } }
         }
         if isRecording { stopMovie() }   // the movie belongs to the old camera
+        formats = FormatOption.options(for: cam)
+        // The camera's own mode before the session starts says nothing about what it will run: the session puts
+        // it on its preset. So the mode is always chosen: the last one picked for this camera, else the largest.
+        let saved = UserDefaults.standard.string(forKey: Self.formatKey(cam))
+        let pick = formats.first { $0.id == saved } ?? Self.naturalFormat(formats, minFPS: 30)
+        selectedFormatID = pick?.id
+        let frame = pick.flatMap { Self.frameDuration(fps: $0.fps, in: $0.format) }
         sessionQueue.async {
+            if let pick { keeper.choose(pick.format, frame: frame, for: cam) }
             session.beginConfiguration()
             // Video inputs only: a recording's microphone is MediaCapture's to remove.
             for case let i as AVCaptureDeviceInput in session.inputs where i.device.hasMediaType(.video) { session.removeInput(i) }
@@ -558,39 +568,28 @@ final class CameraController {
             framer.configure(mode: mode)
             session.commitConfiguration()
             if run, !session.isRunning { session.startRunning() }
+            if session.isRunning { keeper.apply(to: cam) } else { keeper.release() }
         }
-        formats = FormatOption.options(for: cam)
-        syncFormat(cam)
         syncCenterStage()
         attachUVC()
-    }
-
-    private func syncFormat(_ cam: AVCaptureDevice) {
-        let d = CMVideoFormatDescriptionGetDimensions(cam.activeFormat.formatDescription)
-        let fps = cam.activeVideoMinFrameDuration.seconds > 0 ? Int((1 / cam.activeVideoMinFrameDuration.seconds).rounded()) : 0
-        selectedFormatID = formats.first { $0.width == Int(d.width) && $0.height == Int(d.height) && $0.fps == fps }?.id
-            ?? formats.first { $0.width == Int(d.width) && $0.height == Int(d.height) }?.id
     }
 
     func selectFormat(_ id: String) {
         guard let opt = formats.first(where: { $0.id == id }), let cam = currentDevice else { return }
         selectedFormatID = id
+        UserDefaults.standard.set(id, forKey: Self.formatKey(cam))
         userEdited()
-        let format = opt.format
+        let format = opt.format, mode = self.mode, session = self.session
         let t = Self.frameDuration(fps: opt.fps, in: format)
         // On the session queue, so it lands after any pending (re)configuration instead of being reset by it.
         sessionQueue.async {
-            do {
-                try cam.lockForConfiguration()
-                cam.activeFormat = format
-                if let t {
-                    cam.activeVideoMinFrameDuration = t
-                    cam.activeVideoMaxFrameDuration = t
-                }
-                cam.unlockForConfiguration()
-            } catch { NSLog("format change failed: \(error)") }
+            mode.choose(format, frame: t, for: cam)
+            if session.isRunning { mode.apply(to: cam) }   // else on the next start
         }
     }
+
+    @ObservationIgnored private let mode = ModeKeeper()
+    private static func formatKey(_ cam: AVCaptureDevice) -> String { "format." + cam.uniqueID }
 
     /// A frame duration AVFoundation accepts for `fps` in `format`. Discrete ranges must use the device's own
     /// CMTime: the Link 2C's "30 fps" is not exactly 1/30 s, and setting 1/30 throws an uncatchable ObjC exception.
@@ -867,7 +866,7 @@ final class CameraController {
         }
     }
 
-    /// Highest resolution with a >= minFPS mode; 16:9 preferred; 30 over 60 at the same size.
+    /// Highest resolution with a >= minFPS mode; 16:9 preferred; the highest frame rate at that size.
     static func naturalFormat(_ formats: [FormatOption], minFPS: Int) -> FormatOption? {
         let pick = VideoModeChooser.natural(formats.map { VideoMode(width: $0.width, height: $0.height, fps: $0.fps) }, minFPS: minFPS)
         return formats.first { $0.id == pick?.id }
@@ -893,5 +892,42 @@ final class CameraController {
     func setAutoExposure(_ on: Bool) {
         let supported = state("ae-mode")?.res?.first ?? 0x09
         set("ae-mode", [on ? (supported & 8 != 0 ? 8 : 2) : 1])
+    }
+}
+
+/// The video mode the user picked. On macOS the session puts the camera back on its preset's format (1080p for
+/// `.high`) as soon as the device lock is released; there is no input-priority preset. So the lock is held while
+/// the session runs with a chosen mode, and released when the session stops or the camera changes, so other apps
+/// get the camera back unrestricted. Holding it longer than needed degrades other apps (AVCaptureDevice.h).
+/// Session queue only.
+private final class ModeKeeper: @unchecked Sendable {
+    private var deviceID: String?
+    private var format: AVCaptureDevice.Format?
+    private var frame: CMTime?
+    private var locked: AVCaptureDevice?
+
+    func choose(_ format: AVCaptureDevice.Format, frame: CMTime?, for cam: AVCaptureDevice) {
+        deviceID = cam.uniqueID; self.format = format; self.frame = frame
+    }
+
+    /// Puts `cam` in the chosen mode and keeps it there. Call after the session starts or the camera is attached.
+    func apply(to cam: AVCaptureDevice) {
+        guard cam.uniqueID == deviceID, let format else { return release() }
+        if locked !== cam {
+            release()
+            do { try cam.lockForConfiguration() } catch { NSLog("Camdeck: format lock failed: \(error)"); return }
+            locked = cam
+        }
+        if cam.activeFormat != format { cam.activeFormat = format }
+        if let frame, cam.activeVideoMinFrameDuration != frame {
+            cam.activeVideoMinFrameDuration = frame
+            cam.activeVideoMaxFrameDuration = frame
+        }
+    }
+
+    /// Lets the session (and other apps) change the camera's format again.
+    func release() {
+        locked?.unlockForConfiguration()
+        locked = nil
     }
 }

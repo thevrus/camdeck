@@ -188,7 +188,7 @@ final class DriverTests: XCTestCase {
             }
         }
         XCTAssertEqual(VideoModeChooser.natural(modes, minFPS: 30), VideoMode(width: 3840, height: 2160, fps: 30))
-        XCTAssertEqual(VideoModeChooser.natural(modes.filter { $0.width < 3840 }, minFPS: 30), VideoMode(width: 1920, height: 1080, fps: 30))
+        XCTAssertEqual(VideoModeChooser.natural(modes.filter { $0.width < 3840 }, minFPS: 30), VideoMode(width: 1920, height: 1080, fps: 60))
         XCTAssertEqual(VideoModeChooser.offeredRates(minFrameRate: 30, maxFrameRate: 30), [30])
     }
 

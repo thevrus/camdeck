@@ -24,20 +24,29 @@ struct FormatOption: Identifiable, Hashable {
     }
 
     static func options(for device: AVCaptureDevice) -> [FormatOption] {
-        var seen = Set<String>()
         var out: [FormatOption] = []
+        var index: [String: Int] = [:]
         for f in device.formats {
             let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
             for r in f.videoSupportedFrameRateRanges {
                 // Ranges can be continuous (e.g. 1–60); offer the common rates inside them plus the max.
                 for fps in VideoModeChooser.offeredRates(minFrameRate: r.minFrameRate, maxFrameRate: r.maxFrameRate) {
                     let id = VideoMode(width: Int(d.width), height: Int(d.height), fps: fps).id
-                    if seen.insert(id).inserted {
-                        out.append(FormatOption(id: id, width: Int(d.width), height: Int(d.height), fps: fps, format: f))
+                    let opt = FormatOption(id: id, width: Int(d.width), height: Int(d.height), fps: fps, format: f)
+                    if let i = index[id] {
+                        // Same mode in two pixel formats: keep 4:2:2 (2vuy), twice the color detail of 4:2:0.
+                        if is422(f), !is422(out[i].format) { out[i] = opt }
+                    } else {
+                        index[id] = out.count
+                        out.append(opt)
                     }
                 }
             }
         }
         return out.sorted { ($0.height, $0.fps) > ($1.height, $1.fps) }
+    }
+
+    private static func is422(_ f: AVCaptureDevice.Format) -> Bool {
+        CMFormatDescriptionGetMediaSubType(f.formatDescription) == kCVPixelFormatType_422YpCbCr8
     }
 }

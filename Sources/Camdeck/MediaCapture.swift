@@ -21,6 +21,8 @@ final class MediaCapture: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFile
     /// Adds the photo and movie outputs. Session queue, inside a configuration.
     func attach(to session: AVCaptureSession) {
         for o in [photoOutput, movieOutput] as [AVCaptureOutput] where session.canAddOutput(o) { session.addOutput(o) }
+        // Set once here: changing it while running reconfigures the session and can blink the preview.
+        photoOutput.maxPhotoQualityPrioritization = .quality
     }
 
     /// Call after the camera input changes: new input, new connections, mirroring set again. Session queue.
@@ -34,10 +36,20 @@ final class MediaCapture: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureFile
 
     // MARK: Photo
 
-    func takePhoto(done: @escaping @MainActor (Result<URL, Error>) -> Void) {
+    /// A JPEG at the largest size the camera's current mode allows, processed for quality over speed. Session queue.
+    func takePhoto(from device: AVCaptureDevice, done: @escaping @MainActor (Result<URL, Error>) -> Void) {
+        // Read the size at the shot: the mode can change from many places, and a size the mode
+        // does not list makes capturePhoto throw.
+        let best = device.activeFormat.supportedMaxPhotoDimensions.max { $0.width * $0.height < $1.width * $1.height }
+        if let best, photoOutput.maxPhotoDimensions.width != best.width || photoOutput.maxPhotoDimensions.height != best.height {
+            photoOutput.maxPhotoDimensions = best
+        }
         let settings = photoOutput.availablePhotoCodecTypes.contains(.jpeg)
-            ? AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
+            ? AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg,
+                                              AVVideoCompressionPropertiesKey: [AVVideoQualityKey: 0.95]])
             : AVCapturePhotoSettings()
+        if let best { settings.maxPhotoDimensions = best }
+        settings.photoQualityPrioritization = .quality
         lock.lock(); photoDone[settings.uniqueID] = done; lock.unlock()
         photoOutput.capturePhoto(with: settings, delegate: self)
     }

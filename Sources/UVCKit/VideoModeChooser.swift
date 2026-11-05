@@ -8,7 +8,7 @@ public struct VideoMode: Hashable, Sendable {
 }
 
 public enum VideoModeChooser {
-    /// Highest resolution with a >= minFPS mode; 16:9 preferred; the lowest qualifying rate at that size (30 over 60).
+    /// Highest resolution with a >= minFPS mode; 16:9 preferred; the highest rate at that size (60 over 30).
     public static func natural(_ modes: [VideoMode], minFPS: Int) -> VideoMode? {
         let ok = modes.filter { $0.fps >= minFPS }
         let wide = ok.filter { abs(Double($0.width) / Double(max($0.height, 1)) - 16.0 / 9.0) < 0.02 }
@@ -16,7 +16,7 @@ public enum VideoModeChooser {
         return pool.min { a, b in
             let pa = a.width * a.height, pb = b.width * b.height
             if pa != pb { return pa > pb }
-            return a.fps < b.fps
+            return a.fps > b.fps
         }
     }
 
